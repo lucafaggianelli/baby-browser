@@ -20,8 +20,8 @@ logger = get_logger(__name__)
 @dataclass
 class URL:
     scheme: str
-    host: str
-    path: str
+    host: str = None
+    path: str = ""
     port: int = 80
 
 
@@ -43,7 +43,10 @@ def _get_scheme_default_port(scheme: str):
 
 
 def parse_url(url: str):
-    scheme, url_no_scheme = url.split('://', 1)
+    scheme, url_no_scheme = url.split(':', 1)
+
+    if scheme == 'data':
+        return URL(scheme, path=url_no_scheme)
 
     parts = url_no_scheme.split("/", 1)
     host_parts = parts[0].split(":", 1)

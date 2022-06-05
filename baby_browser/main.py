@@ -29,6 +29,9 @@ def load_page(url: str):
     elif parsed_url.scheme == 'file':
         with open(parsed_url.path, 'r') as f:
             html = f.read()
+    elif parsed_url.scheme == 'data':
+        mime_type, content = parsed_url.path.split(',', 1)
+        html = content
     else:
         raise ValueError(f"URL scheme not supported: {url}")
 
