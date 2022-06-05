@@ -34,12 +34,29 @@ class HttpResponse:
 
 
 def _get_available_content_encoding():
-    # return "gzip"
-    return "*"
+    return "gzip"
+    # return "*"
 
 
 def _get_scheme_default_port(scheme: str):
     return 80 if scheme == "http" else 443
+
+
+def _read_chunked_response(reader: io.BufferedReader):
+    data = bytes()
+
+    while True:
+        chunk_length = int(reader.readline().strip(), base=16)
+
+        if chunk_length == 0:
+            break
+
+        data += reader.read(chunk_length)
+
+        # Each chunk is followed by a newline
+        reader.readline()
+
+    return data
 
 
 def parse_url(url: str):
@@ -72,10 +89,7 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
 
     url_parsed = parse_url(url) if type(url) == str else url
 
-    print("fetchin", url_parsed)
-
     sock.connect((url_parsed.host, url_parsed.port))
-
 
     if url_parsed.scheme == "https":
         ctx = ssl.create_default_context()
@@ -101,46 +115,42 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
     ])
 
     encoded_payload = _encode_http_request(payload)
+    logger.debug("Sending HTTP request: \n" + encoded_payload.decode("utf-8"))
 
     sent_bytes = sock.send(encoded_payload)
 
     if sent_bytes != len(encoded_payload):
         logger.warn(f"Sent only {sent_bytes}/{len(encoded_payload)} bytes")
 
-    if content_encoding == 'gzip':
-        data = bytes()
-        while True:
-            chunk = sock.recv(1024)
-            if not chunk:
-                break
+    t0 = time_ns()
+    response = sock.makefile("rb")
 
-            data += chunk
-
-        response = io.TextIOWrapper(gzip.decompress(data), encoding="utf-8", newline=HTTP_NEWLINE)
-    else:
-        response = sock.makefile("r", encoding="utf-8", newline=HTTP_NEWLINE)
-
-    status_line = response.readline()
+    status_line = response.readline().decode("utf-8")
     version, status_code, status = status_line.split(" ", 2)
     status_code = int(status_code)
 
-    headers = {}
+    response_headers = {}
     while True:
-        line = response.readline()
+        line = response.readline().decode("utf-8")
 
         if line == HTTP_NEWLINE:
             break
 
         header, value = line.split(":", 1)
-        headers[header.lower()] = value.strip()
+        response_headers[header.lower()] = value.strip()
 
-    assert "transfer-encoding" not in headers
-    assert "content-encoding" not in headers
+    if response_headers.get('content-encoding') == 'gzip':
+        if response_headers['transfer-encoding'] == 'chunked':
+            data = _read_chunked_response(response)
+        else:
+            logger.error(f"Unsupported Transfer-Encoding {response_headers['transfer-encoding']}")
 
-    t0 = time_ns()
-    body = response.read()
+        body = gzip.decompress(data).decode("utf-8")
+    else:
+        body = response.read()
+
     logger.debug(f"Read {format_bytes(len(body))} in {(time_ns() - t0) / 1000} ms")
 
     sock.close()
 
-    return HttpResponse(headers, body, status, status_code)
+    return HttpResponse(response_headers, body, status, status_code)

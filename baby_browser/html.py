@@ -1,21 +1,8 @@
-HTML_ENTITIES = {
-    'nbsb': ' ',
-    'lt': '<',
-    'gt': '>',
-    'amp': '&',
-    'quot': '"',
-    'apos': "'",
-    'cent': '¢',
-    'pound': '£',
-    'yen': '¥',
-    'euro': '€',
-    'copy': '©',
-    'reg': '®',
-}
+from html.entities import html5 as html_entities
 
 
 def _convert_html_entity(value: str):
-    return HTML_ENTITIES[value]
+    return html_entities[value + ';']
 
 
 def render_html(html: str):
