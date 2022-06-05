@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Union
 
 from dataclasses import dataclass
 import gzip
@@ -44,6 +44,7 @@ def _get_scheme_default_port(scheme: str):
 
 def parse_url(url: str):
     scheme, url_no_scheme = url.split(':', 1)
+    url_no_scheme = url_no_scheme.removeprefix('//')
 
     if scheme == 'data':
         return URL(scheme, path=url_no_scheme)
@@ -62,16 +63,19 @@ def _encode_http_request(lines: List[str]):
     return HTTP_NEWLINE.join(lines + ["", ""]).encode("utf-8")
 
 
-def fetch(url: str, method: str = None, headers: dict = None):
+def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
     sock = socket.socket(
         family=socket.AF_INET,
         type=socket.SOCK_STREAM,
         proto=socket.IPPROTO_TCP,
     )
 
-    url_parsed = parse_url(url)
+    url_parsed = parse_url(url) if type(url) == str else url
+
+    print("fetchin", url_parsed)
 
     sock.connect((url_parsed.host, url_parsed.port))
+
 
     if url_parsed.scheme == "https":
         ctx = ssl.create_default_context()
