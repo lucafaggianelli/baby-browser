@@ -9,7 +9,9 @@ from baby_browser.networking import fetch, parse_url
 logger = get_logger(__name__)
 
 
-DEFAULT_HTML_URI = "file://" + str(pathlib.Path(__file__).parent / '..' / 'browser.engineering.html')
+DEFAULT_HTML_URI = "file://" + str(
+    pathlib.Path(__file__).parent / ".." / "browser.engineering.html"
+)
 
 
 def load_page(url: str):
@@ -17,20 +19,22 @@ def load_page(url: str):
 
     html = ""
 
-    if parsed_url.scheme in ('http', 'https'):
+    if parsed_url.scheme in ("http", "https"):
         response = fetch(parsed_url)
 
         if response.status_code != 200:
-            logger.error(f"The server responded with {response.status_code}: {response.status}")
+            logger.error(
+                f"The server responded with {response.status_code}: {response.status}"
+            )
             logger.error(response.body)
             sys.exit(1)
 
         html = response.body
-    elif parsed_url.scheme == 'file':
-        with open(parsed_url.path, 'r') as f:
+    elif parsed_url.scheme == "file":
+        with open(parsed_url.path, "r") as f:
             html = f.read()
-    elif parsed_url.scheme == 'data':
-        mime_type, content = parsed_url.path.split(',', 1)
+    elif parsed_url.scheme == "data":
+        mime_type, content = parsed_url.path.split(",", 1)
         html = content
     else:
         raise ValueError(f"URL scheme not supported: {url}")
@@ -44,5 +48,5 @@ def main():
     load_page(url)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

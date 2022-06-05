@@ -60,10 +60,10 @@ def _read_chunked_response(reader: io.BufferedReader):
 
 
 def parse_url(url: str):
-    scheme, url_no_scheme = url.split(':', 1)
-    url_no_scheme = url_no_scheme.removeprefix('//')
+    scheme, url_no_scheme = url.split(":", 1)
+    url_no_scheme = url_no_scheme.removeprefix("//")
 
-    if scheme == 'data':
+    if scheme == "data":
         return URL(scheme, path=url_no_scheme)
 
     parts = url_no_scheme.split("/", 1)
@@ -109,10 +109,9 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
         f"{method or 'GET'} {url_parsed.path} HTTP/1.1",
     ]
 
-    payload.extend([
-        f"{header}: {value.strip()}"
-        for header, value in request_headers.items()
-    ])
+    payload.extend(
+        [f"{header}: {value.strip()}" for header, value in request_headers.items()]
+    )
 
     encoded_payload = _encode_http_request(payload)
     logger.debug("Sending HTTP request: \n" + encoded_payload.decode("utf-8"))
@@ -139,11 +138,13 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
         header, value = line.split(":", 1)
         response_headers[header.lower()] = value.strip()
 
-    if response_headers.get('content-encoding') == 'gzip':
-        if response_headers['transfer-encoding'] == 'chunked':
+    if response_headers.get("content-encoding") == "gzip":
+        if response_headers["transfer-encoding"] == "chunked":
             data = _read_chunked_response(response)
         else:
-            logger.error(f"Unsupported Transfer-Encoding {response_headers['transfer-encoding']}")
+            logger.error(
+                f"Unsupported Transfer-Encoding {response_headers['transfer-encoding']}"
+            )
 
         body = gzip.decompress(data).decode("utf-8")
     else:

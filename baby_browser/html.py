@@ -2,7 +2,7 @@ from html.entities import html5 as html_entities
 
 
 def _convert_html_entity(value: str):
-    return html_entities[value + ';']
+    return html_entities[value + ";"]
 
 
 def render_html(html: str):
@@ -23,15 +23,15 @@ def render_html(html: str):
             in_tag = False
             in_tag_name = False
 
-            if tag_name == 'body':
+            if tag_name == "body":
                 in_body = True
-        elif not in_tag and c == '&':
+        elif not in_tag and c == "&":
             in_entity = True
             entity_content = ""
-        elif in_entity and c == ';':
+        elif in_entity and c == ";":
             in_entity = False
             print(_convert_html_entity(entity_content), end="")
-        elif in_tag and in_tag_name and c == ' ':
+        elif in_tag and in_tag_name and c == " ":
             in_tag_name = False
         elif in_tag_name:
             tag_name += c.lower()
