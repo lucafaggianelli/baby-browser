@@ -15,7 +15,7 @@ def render_html(html: str):
     entity_content = ""
 
     for c in html:
-        if c == "<":
+        if c == "<" and tag_name != "script":
             in_tag = True
             in_tag_name = True
             tag_name = ""
@@ -25,7 +25,7 @@ def render_html(html: str):
 
             if tag_name == "body":
                 in_body = True
-        elif not in_tag and c == "&":
+        elif not in_tag and c == "&" and tag_name != "script":
             in_entity = True
             entity_content = ""
         elif in_entity and c == ";":
