@@ -11,6 +11,7 @@ from baby_browser.utils import format_bytes
 from baby_browser.logger import get_logger
 
 
+HTTP_DEFAULT_CHARSET = "ISO-8859-1"
 HTTP_NEWLINE = "\r\n"
 
 
@@ -31,6 +32,10 @@ class HttpResponse:
     body: str
     status: str
     status_code: int
+
+    @property
+    def is_redirect(self):
+        return self.status_code >= 300 and self.status_code < 400
 
 
 def _get_available_content_encoding():
@@ -59,6 +64,18 @@ def _read_chunked_response(reader: io.BufferedReader):
     return data
 
 
+def _parse_header_with_attributes(header_line: str):
+    parts = header_line.split(';')
+
+    attributes = {}
+
+    for attribute in parts[1:]:
+        key, value = attribute.split("=")
+        attributes[key.strip().lower()] = value.strip()
+
+    return parts[0], attributes
+
+
 def parse_url(url: str):
     scheme, url_no_scheme = url.split(":", 1)
     url_no_scheme = url_no_scheme.removeprefix("//")
@@ -77,36 +94,38 @@ def parse_url(url: str):
 
 
 def _encode_http_request(lines: List[str]):
-    return HTTP_NEWLINE.join(lines + ["", ""]).encode("utf-8")
+    return HTTP_NEWLINE.join(lines + ["", ""]).encode(HTTP_DEFAULT_CHARSET)
 
 
-def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
+def _fetch_inner(
+    url: URL,
+    method: str,
+    headers: dict,
+    max_redirects: int,
+    redirects_count: int,
+):
     sock = socket.socket(
         family=socket.AF_INET,
         type=socket.SOCK_STREAM,
         proto=socket.IPPROTO_TCP,
     )
 
-    url_parsed = parse_url(url) if type(url) == str else url
+    sock.connect((url.host, url.port))
 
-    sock.connect((url_parsed.host, url_parsed.port))
-
-    if url_parsed.scheme == "https":
+    if url.scheme == "https":
         ctx = ssl.create_default_context()
-        sock = ctx.wrap_socket(sock, server_hostname=url_parsed.host)
-
-    content_encoding = _get_available_content_encoding()
+        sock = ctx.wrap_socket(sock, server_hostname=url.host)
 
     request_headers = {
-        "Accept-Encoding": content_encoding,
+        "Accept-Encoding": _get_available_content_encoding(),
         "Connection": "close",
         "User-Agent": "BabyBrowser/0.1.0",
         **(headers or {}),
-        "Host": url_parsed.host,
+        "Host": url.host,
     }
 
     payload = [
-        f"{method or 'GET'} {url_parsed.path} HTTP/1.1",
+        f"{method or 'GET'} {url.path} HTTP/1.1",
     ]
 
     payload.extend(
@@ -114,7 +133,6 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
     )
 
     encoded_payload = _encode_http_request(payload)
-    logger.debug("Sending HTTP request: \n" + encoded_payload.decode("utf-8"))
 
     sent_bytes = sock.send(encoded_payload)
 
@@ -124,13 +142,13 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
     t0 = time_ns()
     response = sock.makefile("rb")
 
-    status_line = response.readline().decode("utf-8")
+    status_line = response.readline().decode(HTTP_DEFAULT_CHARSET)
     version, status_code, status = status_line.split(" ", 2)
     status_code = int(status_code)
 
     response_headers = {}
     while True:
-        line = response.readline().decode("utf-8")
+        line = response.readline().decode(HTTP_DEFAULT_CHARSET)
 
         if line == HTTP_NEWLINE:
             break
@@ -138,20 +156,52 @@ def fetch(url: Union[str, URL], method: str = None, headers: dict = None):
         header, value = line.split(":", 1)
         response_headers[header.lower()] = value.strip()
 
-    if response_headers.get("content-encoding") == "gzip":
-        if response_headers["transfer-encoding"] == "chunked":
+    logger.debug(f"Received headers: {response_headers}")
+
+    content_encoding = response_headers.get("content-encoding")
+    transfer_encoding = response_headers.get("transfer-encoding")
+
+    content_type, content_type_attributes = _parse_header_with_attributes(response_headers.get("content-type", "text/html"))
+
+    if not content_encoding:
+        body = response.read()
+    elif content_encoding == "gzip":
+        if not transfer_encoding:
+            data = response.read()
+        elif transfer_encoding == "chunked":
             data = _read_chunked_response(response)
         else:
-            logger.error(
-                f"Unsupported Transfer-Encoding {response_headers['transfer-encoding']}"
-            )
+            raise ValueError(f"Unsupported Transfer-Encoding: {transfer_encoding}")
 
-        body = gzip.decompress(data).decode("utf-8")
+        body = gzip.decompress(data)
     else:
-        body = response.read()
+        raise ValueError(f"Unsupported Content-Encoding: {content_encoding}")
 
-    logger.debug(f"Read {format_bytes(len(body))} in {(time_ns() - t0) / 1000} ms")
+    body = body.decode(content_type_attributes.get("charset", HTTP_DEFAULT_CHARSET))
+
+    logger.debug(f"Read {format_bytes(len(body))} in {(time_ns() - t0) / 1_000_000} us")
 
     sock.close()
 
-    return HttpResponse(response_headers, body, status, status_code)
+    response = HttpResponse(response_headers, body, status, status_code)
+
+    if response.is_redirect and max_redirects > 0 and redirects_count < max_redirects:
+        location = response.headers.get('location')
+        location_url = parse_url(location)
+        logger.debug(f'Following redirect to {location}')
+
+        response = _fetch_inner(location_url, method, headers, max_redirects, redirects_count + 1)
+
+    return response
+
+
+def fetch(
+    url: Union[str, URL],
+    method: str = None,
+    headers: dict = None,
+    max_redirects: int = 5,
+):
+    _url = parse_url(url) if type(url) == str else url
+    _method = method or 'GET'
+
+    return _fetch_inner(_url, _method, headers, max_redirects, 0)
