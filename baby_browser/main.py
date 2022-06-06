@@ -1,12 +1,8 @@
 import pathlib
 import sys
+import tkinter
 
-from baby_browser.html import render_html
-from baby_browser.logger import get_logger
-from baby_browser.networking import fetch, parse_url
-
-
-logger = get_logger(__name__)
+from baby_browser.browser import Browser
 
 
 DEFAULT_HTML_URI = "file://" + str(
@@ -14,38 +10,12 @@ DEFAULT_HTML_URI = "file://" + str(
 )
 
 
-def load_page(url: str):
-    parsed_url = parse_url(url)
-
-    html = ""
-
-    if parsed_url.scheme in ("http", "https"):
-        response = fetch(parsed_url)
-
-        if response.status_code != 200:
-            logger.error(
-                f"The server responded with {response.status_code}: {response.status}"
-            )
-            logger.error(response.body)
-            sys.exit(1)
-
-        html = response.body
-    elif parsed_url.scheme == "file":
-        with open(parsed_url.path, "r") as f:
-            html = f.read()
-    elif parsed_url.scheme == "data":
-        mime_type, content = parsed_url.path.split(",", 1)
-        html = content
-    else:
-        raise ValueError(f"URL scheme not supported: {url}")
-
-    render_html(html)
-
-
 def main():
     url = sys.argv[1] if len(sys.argv) >= 2 else DEFAULT_HTML_URI
 
-    load_page(url)
+    browser = Browser()
+    browser.load_page(url)
+    tkinter.mainloop()
 
 
 if __name__ == "__main__":

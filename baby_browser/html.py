@@ -5,7 +5,9 @@ def _convert_html_entity(value: str):
     return html_entities[value + ";"]
 
 
-def render_html(html: str):
+def lexer(html: str):
+    output = ""
+
     in_tag = False
     in_tag_name = False
     in_body = False
@@ -30,7 +32,7 @@ def render_html(html: str):
             entity_content = ""
         elif in_entity and c == ";":
             in_entity = False
-            print(_convert_html_entity(entity_content), end="")
+            output += _convert_html_entity(entity_content)
         elif in_tag and in_tag_name and c == " ":
             in_tag_name = False
         elif in_tag_name:
@@ -38,4 +40,6 @@ def render_html(html: str):
         elif in_entity:
             entity_content += c.lower()
         elif not in_tag and in_body:
-            print(c, end="")
+            output += c
+
+    return output

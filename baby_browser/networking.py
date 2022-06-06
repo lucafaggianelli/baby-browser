@@ -39,8 +39,8 @@ class HttpResponse:
 
 
 def _get_available_content_encoding():
-    return "gzip"
-    # return "*"
+    # return "gzip"
+    return "*"
 
 
 def _get_scheme_default_port(scheme: str):
@@ -163,16 +163,16 @@ def _fetch_inner(
 
     content_type, content_type_attributes = _parse_header_with_attributes(response_headers.get("content-type", "text/html"))
 
-    if not content_encoding:
-        body = response.read()
-    elif content_encoding == "gzip":
-        if not transfer_encoding:
-            data = response.read()
-        elif transfer_encoding == "chunked":
-            data = _read_chunked_response(response)
-        else:
-            raise ValueError(f"Unsupported Transfer-Encoding: {transfer_encoding}")
+    if not transfer_encoding:
+        data = response.read()
+    elif transfer_encoding == "chunked":
+        data = _read_chunked_response(response)
+    else:
+        raise ValueError(f"Unsupported Transfer-Encoding: {transfer_encoding}")
 
+    if not content_encoding:
+        body = data
+    elif content_encoding == "gzip":
         body = gzip.decompress(data)
     else:
         raise ValueError(f"Unsupported Content-Encoding: {content_encoding}")
