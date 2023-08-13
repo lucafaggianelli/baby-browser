@@ -68,9 +68,9 @@ class Browser:
         if event.type == tkinter.EventType.MouseWheel:
             scroll_delta -= event.delta * SCROLL_STEP
         elif event.type == tkinter.EventType.KeyPress:
-            if event.keysym == 'Down':
+            if event.keysym == "Down":
                 scroll_delta -= SCROLL_STEP
-            elif event.keysym == 'Up':
+            elif event.keysym == "Up":
                 scroll_delta += SCROLL_STEP
 
         if self.scroll + scroll_delta >= 0:
@@ -109,7 +109,11 @@ class Browser:
 
     def draw(self):
         for x, y, c in self.display_list:
-            if (y > self.scroll + self.canvas.winfo_height()) or (y + VSTEP < self.scroll):
+            is_before_viewport = y > self.scroll + self.canvas.winfo_height()
+            is_after_viewport = y + VSTEP < self.scroll
+
+            # If the text is not visible skip the rendering
+            if is_before_viewport or is_after_viewport:
                 continue
 
             self.canvas.create_text(x, y - self.scroll, text=c)

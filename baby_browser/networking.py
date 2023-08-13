@@ -65,7 +65,7 @@ def _read_chunked_response(reader: io.BufferedReader):
 
 
 def _parse_header_with_attributes(header_line: str):
-    parts = header_line.split(';')
+    parts = header_line.split(";")
 
     attributes = {}
 
@@ -161,7 +161,9 @@ def _fetch_inner(
     content_encoding = response_headers.get("content-encoding")
     transfer_encoding = response_headers.get("transfer-encoding")
 
-    content_type, content_type_attributes = _parse_header_with_attributes(response_headers.get("content-type", "text/html"))
+    content_type, content_type_attributes = _parse_header_with_attributes(
+        response_headers.get("content-type", "text/html")
+    )
 
     if not transfer_encoding:
         data = response.read()
@@ -186,11 +188,13 @@ def _fetch_inner(
     response = HttpResponse(response_headers, body, status, status_code)
 
     if response.is_redirect and max_redirects > 0 and redirects_count < max_redirects:
-        location = response.headers.get('location')
+        location = response.headers.get("location")
         location_url = parse_url(location)
-        logger.debug(f'Following redirect to {location}')
+        logger.debug(f"Following redirect to {location}")
 
-        response = _fetch_inner(location_url, method, headers, max_redirects, redirects_count + 1)
+        response = _fetch_inner(
+            location_url, method, headers, max_redirects, redirects_count + 1
+        )
 
     return response
 
@@ -202,6 +206,6 @@ def fetch(
     max_redirects: int = 5,
 ):
     _url = parse_url(url) if type(url) == str else url
-    _method = method or 'GET'
+    _method = method or "GET"
 
     return _fetch_inner(_url, _method, headers, max_redirects, 0)
