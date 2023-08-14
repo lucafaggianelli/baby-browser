@@ -104,6 +104,8 @@ def _fetch_inner(
     max_redirects: int,
     redirects_count: int,
 ):
+    t0 = time_ns()
+
     sock = socket.socket(
         family=socket.AF_INET,
         type=socket.SOCK_STREAM,
@@ -139,7 +141,6 @@ def _fetch_inner(
     if sent_bytes != len(encoded_payload):
         logger.warn(f"Sent only {sent_bytes}/{len(encoded_payload)} bytes")
 
-    t0 = time_ns()
     response = sock.makefile("rb")
 
     status_line = response.readline().decode(HTTP_DEFAULT_CHARSET)
