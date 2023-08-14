@@ -1,4 +1,4 @@
-from typing import List, Union
+from typing import List, Optional
 
 from dataclasses import dataclass
 import gzip
@@ -22,7 +22,7 @@ logger = get_logger(__name__)
 @dataclass
 class URL:
     scheme: str
-    host: str = None
+    host: Optional[str] = None
     path: str = ""
     port: int = 80
 
@@ -40,8 +40,7 @@ class HttpResponse:
 
 
 def _get_available_content_encoding():
-    # return "gzip"
-    return "*"
+    return "gzip"
 
 
 def _get_scheme_default_port(scheme: str):
@@ -91,7 +90,7 @@ def parse_url(url: str):
     port = host_parts[1] if len(host_parts) == 2 else _get_scheme_default_port(scheme)
     path = "/" + (parts[1] if len(parts) == 2 else "")
 
-    return URL(scheme, host, path, port)
+    return URL(scheme, host, path, int(port))
 
 
 def _encode_http_request(lines: List[str]):
@@ -101,9 +100,9 @@ def _encode_http_request(lines: List[str]):
 def _fetch_inner(
     url: URL,
     method: str,
-    headers: dict,
-    max_redirects: int,
-    redirects_count: int,
+    headers: Optional[dict] = None,
+    max_redirects: int = 5,
+    redirects_count: int = 0,
 ):
     t0 = time_ns()
 
@@ -191,23 +190,27 @@ def _fetch_inner(
 
     if response.is_redirect and max_redirects > 0 and redirects_count < max_redirects:
         location = response.headers.get("location")
-        location_url = parse_url(location)
-        logger.debug(f"Following redirect to {location}")
 
-        response = _fetch_inner(
-            location_url, method, headers, max_redirects, redirects_count + 1
-        )
+        if location:
+            location_url = parse_url(location)
+            logger.debug(f"Following redirect to {location}")
+
+            response = _fetch_inner(
+                location_url, method, headers, max_redirects, redirects_count + 1
+            )
+        else:
+            logger.error("Found a redirect without the Location header")
 
     return response
 
 
 def fetch(
-    url: Union[str, URL],
-    method: str = None,
-    headers: dict = None,
+    url: str | URL,
+    method: Optional[str] = None,
+    headers: Optional[dict] = None,
     max_redirects: int = 5,
 ):
-    _url = parse_url(url) if type(url) == str else url
+    _url = parse_url(url) if isinstance(url, str) else url
     _method = method or "GET"
 
     return _fetch_inner(_url, _method, headers, max_redirects, 0)
