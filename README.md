@@ -12,14 +12,14 @@ Implementing a minimal WebBrowser following the great book at https://browser.en
 
 ### 1. Downloading Web Pages
 
-- [ ] Alternate encodings
-- [ ] HTTP/1.1
+- [x] Alternate encodings
+- [x] HTTP/1.1
 - [x] File URL
 - [x] support data scheme
 - [x] Body tag
 - [x] Entities
 - [ ] view-source
-- [ ] Compression
+- [x] Compression
 - [x] Redirects
 - [ ] Caching
 

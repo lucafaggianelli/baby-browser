@@ -180,9 +180,13 @@ def _fetch_inner(
     else:
         raise ValueError(f"Unsupported Content-Encoding: {content_encoding}")
 
-    body = body.decode(content_type_attributes.get("charset", CONTENT_TYPE_DEFAULT_CHARSET))
+    body = body.decode(
+        content_type_attributes.get("charset", CONTENT_TYPE_DEFAULT_CHARSET)
+    )
 
-    logger.debug(f"Read {format_bytes(len(body))} in {(time_ns() - t0) / 1_000_000} us")
+    logger.debug(
+        f"Read {format_bytes(len(data))} ({content_encoding=}) in {(time_ns() - t0) / 1_000_000} us"
+    )
 
     sock.close()
 
