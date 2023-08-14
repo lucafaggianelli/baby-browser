@@ -62,6 +62,7 @@ class Layout:
     def __init__(self, tokens, width: float):
         self.tokens = tokens
         self.width = width
+        self.page_height = 0
 
         self.render()
 
@@ -79,6 +80,8 @@ class Layout:
             self._render_token(token)
 
         self._flush_line()
+
+        self.page_height = self.display_list[-1][1]
 
     def _flush_line(self):
         if not self._line:
@@ -184,7 +187,12 @@ class Browser:
                 scroll_delta += SCROLL_STEP
 
         if self.scroll + scroll_delta >= 0:
-            self.scroll += scroll_delta
+            self.scroll = min(
+                [
+                    self.scroll + scroll_delta,
+                    self.layout.page_height - self.canvas.winfo_height() + 2 * VSTEP,
+                ]
+            )
         else:
             return
 
