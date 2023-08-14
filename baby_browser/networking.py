@@ -11,6 +11,7 @@ from baby_browser.utils import format_bytes
 from baby_browser.logger import get_logger
 
 
+CONTENT_TYPE_DEFAULT_CHARSET = "utf-8"
 HTTP_DEFAULT_CHARSET = "ISO-8859-1"
 HTTP_NEWLINE = "\r\n"
 
@@ -180,7 +181,7 @@ def _fetch_inner(
     else:
         raise ValueError(f"Unsupported Content-Encoding: {content_encoding}")
 
-    body = body.decode(content_type_attributes.get("charset", HTTP_DEFAULT_CHARSET))
+    body = body.decode(content_type_attributes.get("charset", CONTENT_TYPE_DEFAULT_CHARSET))
 
     logger.debug(f"Read {format_bytes(len(body))} in {(time_ns() - t0) / 1_000_000} us")
 
