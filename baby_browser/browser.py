@@ -1,4 +1,5 @@
 import sys
+from time import time_ns
 import tkinter
 from tkinter.font import Font
 from typing import Literal
@@ -6,6 +7,7 @@ from typing import Literal
 from baby_browser.html import Text, lexer
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
+from baby_browser.utils import format_bytes
 
 
 logger = get_logger(__name__)
@@ -21,6 +23,7 @@ def _load_page_content(url: str):
     parsed_url = parse_url(url)
 
     html = ""
+    t0 = time_ns()
 
     if parsed_url.scheme in ("http", "https"):
         response = fetch(parsed_url)
@@ -41,6 +44,10 @@ def _load_page_content(url: str):
         html = content
     else:
         raise ValueError(f"URL scheme not supported: {url}")
+
+    logger.debug(
+        f"Loaded page {format_bytes(len(html))} in {(time_ns() - t0) / 1_000_000} us"
+    )
 
     return html
 

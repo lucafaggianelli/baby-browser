@@ -21,7 +21,7 @@ Implementing a minimal WebBrowser following the great book at https://browser.en
 - [ ] view-source
 - [x] Compression
 - [x] Redirects
-- [ ] Caching
+- [x] Caching
 
 ### 2. Graphics
 
