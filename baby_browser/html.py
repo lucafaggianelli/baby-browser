@@ -1,12 +1,8 @@
-from html.entities import html5 as html_entities
+from html import unescape
 
 
 def _convert_html_entity(value: str) -> str:
-    try:
-        return html_entities[value + ";"]
-    except KeyError:
-        print(f"Unknown HTML Entity: {value}")
-        return ""
+    return unescape(f"&{value};")
 
 
 class Node:
