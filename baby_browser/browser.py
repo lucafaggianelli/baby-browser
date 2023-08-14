@@ -13,6 +13,9 @@ logger = get_logger(__name__)
 HSTEP, VSTEP = 13, 18
 SCROLL_STEP = 3 * VSTEP
 
+FontWeight = Literal["normal", "bold"]
+FontSlant = Literal["roman", "italic"]
+
 
 def _load_page_content(url: str):
     parsed_url = parse_url(url)
@@ -42,6 +45,19 @@ def _load_page_content(url: str):
     return html
 
 
+_fonts_cache = {}
+
+
+def _get_font(size: int, weight: FontWeight, slant: FontSlant) -> Font:
+    key = (size, weight, slant)
+
+    if key not in _fonts_cache:
+        font = Font(size=size, weight=weight, slant=slant)
+        _fonts_cache[key] = font
+
+    return _fonts_cache[key]
+
+
 class Layout:
     def __init__(self, tokens, width: float):
         self.tokens = tokens
@@ -51,15 +67,41 @@ class Layout:
 
     def render(self):
         self.display_list = []
+        self._line = []
         self.cursor_x: float = HSTEP
         self.cursor_y: float = VSTEP
 
-        self.weight: Literal["normal", "bold"] = "normal"
-        self.style: Literal["roman", "italic"] = "roman"
+        self.weight: FontWeight = "normal"
+        self.style: FontSlant = "roman"
         self.font_size = 16
 
         for token in self.tokens:
             self._render_token(token)
+
+        self._flush_line()
+
+    def _flush_line(self):
+        if not self._line:
+            return
+
+        # Tallest word in the line
+        max_ascent: float = max(
+            [font.metrics("ascent") for x, word, font in self._line]
+        )
+        baseline = self.cursor_y + 1.25 * max_ascent
+
+        # Biggest descent in the line
+        max_descent: float = max(
+            [font.metrics("descent") for x, word, font in self._line]
+        )
+
+        for x, word, font in self._line:
+            y = baseline - font.metrics("ascent")
+            self.display_list.append((x, y, word, font))
+
+        self.cursor_x = HSTEP
+        self.cursor_y = baseline + 1.25 * max_descent
+        self._line = []
 
     def _render_token(self, token):
         if isinstance(token, Text):
@@ -73,10 +115,22 @@ class Layout:
             self.weight = "bold"
         elif token.tag in ("/b", "/strong"):
             self.weight = "normal"
+        elif token.tag == "small":
+            self.font_size -= 2
+        elif token.tag == "/small":
+            self.font_size += 2
+        elif token.tag == "big":
+            self.font_size += 4
+        elif token.tag == "/big":
+            self.font_size -= 4
+        elif token.tag == "br":
+            self._flush_line()
+        elif token.tag == "/p":
+            self._flush_line()
+            self.cursor_y += VSTEP
 
     def _render_word(self, word: str):
-        font = Font(
-            family="Times New Roman",
+        font = _get_font(
             size=self.font_size,
             weight=self.weight,
             slant=self.style,
@@ -84,12 +138,11 @@ class Layout:
 
         word_width = font.measure(word)
 
+        # Break line on word
         if self.cursor_x + word_width > self.width - HSTEP:
-            # Break line on word
-            self.cursor_y += font.metrics("linespace") * 1.25
-            self.cursor_x = HSTEP
+            self._flush_line()
 
-        self.display_list.append((self.cursor_x, self.cursor_y, word, font))
+        self._line.append((self.cursor_x, word, font))
 
         self.cursor_x += word_width + font.measure(" ")
 
@@ -97,6 +150,7 @@ class Layout:
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
+        self.window.wm_title("BabyBrowser")
         self.scroll = 0
         self.canvas = tkinter.Canvas(
             self.window,
