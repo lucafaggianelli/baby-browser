@@ -1,7 +1,8 @@
 import sys
 import tkinter
+from tkinter.font import Font
 
-from baby_browser.html import lexer
+from baby_browser.html import Text, lexer
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
 
@@ -81,23 +82,38 @@ class Browser:
         self.canvas.delete("all")
         self.draw()
 
-    def _layout(self, text):
+    def _layout(self, tokens: list):
         self.display_list = []
         cursor_x, cursor_y = HSTEP, VSTEP
 
-        for c in text:
-            if c == "\n":
-                cursor_y += VSTEP * 1.5
-                cursor_x = HSTEP
-                continue
+        weight = "normal"
+        style = "roman"
 
-            if cursor_x + 2 * HSTEP >= self.canvas.winfo_width():
-                cursor_y += VSTEP
-                cursor_x = HSTEP
-            else:
-                cursor_x += HSTEP
+        for token in tokens:
+            if isinstance(token, Text):
+                for word in token.text.split():
+                    font = Font(
+                        family="Times New Roman", size=16, weight=weight, slant=style
+                    )
 
-            self.display_list.append((cursor_x, cursor_y, c))
+                    word_width = font.measure(word)
+
+                    if cursor_x + word_width > self.canvas.winfo_width() - HSTEP:
+                        # Break line on word
+                        cursor_y += font.metrics("linespace") * 1.25
+                        cursor_x = HSTEP
+
+                    self.display_list.append((cursor_x, cursor_y, word, font))
+
+                    cursor_x += word_width + font.measure(" ")
+            elif token.tag in ("i", "em"):
+                style = "italic"
+            elif token.tag in ("/i", "/em"):
+                style = "roman"
+            elif token.tag in ("b", "strong"):
+                weight = "bold"
+            elif token.tag in ("/b", "/strong"):
+                weight = "normal"
 
     def load_page(self, url: str):
         html = _load_page_content(url)
@@ -108,7 +124,7 @@ class Browser:
         self.draw()
 
     def draw(self):
-        for x, y, c in self.display_list:
+        for x, y, c, font in self.display_list:
             is_before_viewport = y > self.scroll + self.canvas.winfo_height()
             is_after_viewport = y + VSTEP < self.scroll
 
@@ -116,4 +132,4 @@ class Browser:
             if is_before_viewport or is_after_viewport:
                 continue
 
-            self.canvas.create_text(x, y - self.scroll, text=c)
+            self.canvas.create_text(x, y - self.scroll, text=c, font=font, anchor="nw")
