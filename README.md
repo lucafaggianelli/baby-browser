@@ -32,3 +32,8 @@ Implementing a minimal WebBrowser following the great book at https://browser.en
 - [ ] Zoom
 
 ### 3. Formatting text
+- [ ] Centered Text
+- [ ] Superscripts
+- [ ] Soft hyphens
+- [ ] Small caps
+- [ ] Preformatted text
