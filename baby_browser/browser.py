@@ -112,7 +112,7 @@ class Layout:
         self.cursor_y = baseline + 1.25 * max_descent
         self._line = []
 
-    def open_tag(self, element: Element):
+    def _open_tag(self, element: Element):
         if element.tag in ("i", "em"):
             self.style = "italic"
         elif element.tag in ("b", "strong"):
@@ -124,7 +124,7 @@ class Layout:
         elif element.tag == "br":
             self._flush_line()
 
-    def close_tag(self, element: Element):
+    def _close_tag(self, element: Element):
         if element.tag in ("i", "em"):
             self.style = "roman"
         elif element.tag in ("b", "strong"):
@@ -142,12 +142,12 @@ class Layout:
             for word in node.text.split():
                 self._render_word(word)
         elif isinstance(node, Element):
-            self.open_tag(node)
+            self._open_tag(node)
 
             for child in node.children:
                 self._render_tree(child)
 
-            self.close_tag(node)
+            self._close_tag(node)
 
     def _render_word(self, word: str):
         font = _get_font(
