@@ -4,7 +4,7 @@ import tkinter
 from tkinter.font import Font
 from typing import Literal
 
-from baby_browser.html import Text, lexer
+from baby_browser.html import Node, Element, Text, HTMLParser
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
 from baby_browser.utils import format_bytes
@@ -66,8 +66,8 @@ def _get_font(size: int, weight: FontWeight, slant: FontSlant) -> Font:
 
 
 class Layout:
-    def __init__(self, tokens, width: float):
-        self.tokens = tokens
+    def __init__(self, html_tree_root: Node, width: float):
+        self.html_tree_root = html_tree_root
         self.width = width
         self.page_height = 0
 
@@ -83,12 +83,11 @@ class Layout:
         self.style: FontSlant = "roman"
         self.font_size = 16
 
-        for token in self.tokens:
-            self._render_token(token)
+        self._render_tree(self.html_tree_root)
 
         self._flush_line()
 
-        self.page_height = self.display_list[-1][1]
+        self.page_height = self.display_list[-1][1] if len(self.display_list) > 0 else 0
 
     def _flush_line(self):
         if not self._line:
@@ -113,31 +112,42 @@ class Layout:
         self.cursor_y = baseline + 1.25 * max_descent
         self._line = []
 
-    def _render_token(self, token):
-        if isinstance(token, Text):
-            for word in token.text.split():
-                self._render_word(word)
-        elif token.tag in ("i", "em"):
+    def open_tag(self, element: Element):
+        if element.tag in ("i", "em"):
             self.style = "italic"
-        elif token.tag in ("/i", "/em"):
-            self.style = "roman"
-        elif token.tag in ("b", "strong"):
+        elif element.tag in ("b", "strong"):
             self.weight = "bold"
-        elif token.tag in ("/b", "/strong"):
-            self.weight = "normal"
-        elif token.tag == "small":
+        elif element.tag == "small":
             self.font_size -= 2
-        elif token.tag == "/small":
-            self.font_size += 2
-        elif token.tag == "big":
+        elif element.tag == "big":
             self.font_size += 4
-        elif token.tag == "/big":
-            self.font_size -= 4
-        elif token.tag == "br":
+        elif element.tag == "br":
             self._flush_line()
-        elif token.tag == "/p":
+
+    def close_tag(self, element: Element):
+        if element.tag in ("i", "em"):
+            self.style = "roman"
+        elif element.tag in ("b", "strong"):
+            self.weight = "normal"
+        elif element.tag == "small":
+            self.font_size += 2
+        elif element.tag == "big":
+            self.font_size -= 4
+        elif element.tag == "p":
             self._flush_line()
             self.cursor_y += VSTEP
+
+    def _render_tree(self, node: Node):
+        if isinstance(node, Text):
+            for word in node.text.split():
+                self._render_word(word)
+        elif isinstance(node, Element):
+            self.open_tag(node)
+
+            for child in node.children:
+                self._render_tree(child)
+
+            self.close_tag(node)
 
     def _render_word(self, word: str):
         font = _get_font(
@@ -201,7 +211,7 @@ class Browser:
                 ]
             )
         else:
-            return
+            self.scroll = 0
 
         self.canvas.delete("all")
         self.draw()
@@ -209,10 +219,14 @@ class Browser:
     def load_page(self, url: str):
         html = _load_page_content(url)
 
-        self.tokens = lexer(html)
+        self.parser = HTMLParser(html)
+        self.parser.parse()
 
-        self.layout = Layout(self.tokens, self.canvas.winfo_width())
+        if not self.parser.root:
+            logger.error("The HTML tree is empty, did you call .parse()?")
+            return
 
+        self.layout = Layout(self.parser.root, self.canvas.winfo_width())
         self.draw()
 
     def draw(self):
