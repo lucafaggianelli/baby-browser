@@ -26,6 +26,18 @@ SELF_CLOSING_TAGS = [
     "wbr",
 ]
 
+HEAD_TAGS = [
+    "base",
+    "basefont",
+    "bgsound",
+    "noscript",
+    "link",
+    "meta",
+    "title",
+    "style",
+    "script",
+]
+
 
 def _convert_html_entity(value: str) -> str:
     return unescape(f"&{value};")
@@ -68,7 +80,7 @@ class HTMLParser:
 
     def __init__(self, html: str) -> None:
         self.html = html
-        self._unfinished_nodes: list[Node] = []
+        self._unfinished_nodes: list[Element] = []
 
     @timed(logger)
     def parse(self):
@@ -78,8 +90,6 @@ class HTMLParser:
         in_tag = False
         # After < before " "
         in_tag_name = False
-        # In the body tag
-        in_body = False
 
         # HTML Entity i.e. &apos;
         in_entity = False
@@ -105,9 +115,6 @@ class HTMLParser:
                 in_tag = False
                 in_tag_name = False
 
-                if tag_name == "body":
-                    in_body = True
-
                 self._add_tag(tag_name, tag_attributes)
                 text = ""
             elif not in_tag and c == "&" and tag_name != "script":
@@ -127,7 +134,7 @@ class HTMLParser:
                         tag_name += c.lower()
                 else:
                     tag_attributes += c
-            elif not in_tag and in_body:
+            elif not in_tag:
                 text += c
 
         if not in_tag and text:
@@ -156,6 +163,8 @@ class HTMLParser:
         if text.isspace():
             return
 
+        self._handle_implicit_tags()
+
         # Last node seen by the parser
         parent = self._get_last_seen_node()
 
@@ -170,6 +179,8 @@ class HTMLParser:
     def _add_tag(self, tag_name: str, attributes: Optional[str] = None):
         if tag_name.startswith("!"):
             return
+
+        self._handle_implicit_tags(tag_name)
 
         if tag_name.startswith("/"):
             # It's a close tag: `/div`
@@ -207,6 +218,39 @@ class HTMLParser:
             )
 
             self._unfinished_nodes.append(node)
+
+    def _handle_implicit_tags(self, tag_name: Optional[str] = None):
+        """Add html, head and body tags if the HTML document is lacking them
+
+        Args:
+            tag_name (Optional[str], optional): the tag name.
+            Defaults to None if it's a text node.
+        """
+        while True:
+            if not self._unfinished_nodes and tag_name != "html":
+                logger.debug("Implicit tag - adding html")
+                self._add_tag("html")
+            elif (
+                len(self._unfinished_nodes) == 1
+                and self._unfinished_nodes[0].tag == "html"
+                and tag_name not in ["head", "body", "/html"]
+            ):
+                if tag_name in HEAD_TAGS:
+                    logger.debug("Implicit tag - adding head")
+                    self._add_tag("head")
+                else:
+                    logger.debug("Implicit tag - adding body")
+                    self._add_tag("body")
+            elif (
+                len(self._unfinished_nodes) == 2
+                and self._unfinished_nodes[0].tag == "html"
+                and self._unfinished_nodes[1].tag == "head"
+                and tag_name not in (["/head"] + HEAD_TAGS)
+            ):
+                logger.debug("Implicit tag - closing head")
+                self._add_tag("/head")
+            else:
+                break
 
     def print_tree(self, node: Optional[Node] = None, indent=0):
         node = node or self.root
