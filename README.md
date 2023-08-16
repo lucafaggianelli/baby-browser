@@ -37,3 +37,11 @@ Implementing a minimal WebBrowser following the great book at https://browser.en
 - [ ] Soft hyphens
 - [ ] Small caps
 - [ ] Preformatted text
+
+### 4. HTML Tree
+
+- [ ] Comments
+- [ ] Paragraphs
+- [ ] Scripts
+- [ ] Quoted attributes
+- [ ] Syntax Highlighting
