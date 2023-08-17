@@ -2,7 +2,7 @@ import sys
 from time import time_ns
 import tkinter
 from tkinter.font import Font
-from typing import Literal
+from typing import Literal, Optional
 
 from baby_browser.html import Node, Element, Text, HTMLParser
 from baby_browser.logger import get_logger
@@ -65,15 +65,17 @@ def _get_font(size: int, weight: FontWeight, slant: FontSlant) -> Font:
     return _fonts_cache[key]
 
 
-class Layout:
-    def __init__(self, html_tree_root: Node, width: float):
+class BlockLayout:
+    def __init__(self, html_tree_root: Node, parent: "DocumentLayout", previous: Optional[Node] = None):
         self.html_tree_root = html_tree_root
+        self.width = 0
+
+        self._parent = parent
+        self._previous = previous
+        self._children = []
+
+    def layout(self, width: float):
         self.width = width
-        self.page_height = 0
-
-        self.render()
-
-    def render(self):
         self.display_list = []
         self._line = []
         self.cursor_x: float = HSTEP
@@ -86,8 +88,6 @@ class Layout:
         self._render_tree(self.html_tree_root)
 
         self._flush_line()
-
-        self.page_height = self.display_list[-1][1] if len(self.display_list) > 0 else 0
 
     def _flush_line(self):
         if not self._line:
@@ -167,11 +167,29 @@ class Layout:
         self.cursor_x += word_width + font.measure(" ")
 
 
+class DocumentLayout:
+    def __init__(self, node: Node) -> None:
+        self.node = node
+        self.parent = None
+        self.children = []
+        self.display_list = []
+
+    def layout(self, width: float):
+        child = BlockLayout(self.node, self, None)
+        self.children.append(child)
+        child.layout(width)
+        self.display_list = child.display_list
+
+    def get_full_page_height(self) -> float:
+        return self.display_list[-1][1] if len(self.display_list) > 0 else 0
+
+
 class Browser:
     def __init__(self):
         self.window = tkinter.Tk()
         self.window.wm_title("BabyBrowser")
         self.scroll = 0
+        self.page_height = 0
         self.canvas = tkinter.Canvas(
             self.window,
             width=800,
@@ -186,8 +204,8 @@ class Browser:
         self.window.bind("<MouseWheel>", self._on_scroll)
 
     def _on_resize(self, event: tkinter.Event):
-        self.layout.width = self.canvas.winfo_width()
-        self.layout.render()
+        self.document.layout(self.canvas.winfo_width())
+        self.page_height = self.document.get_full_page_height()
 
         self.canvas.delete("all")
         self.draw()
@@ -207,7 +225,7 @@ class Browser:
             self.scroll = min(
                 [
                     self.scroll + scroll_delta,
-                    self.layout.page_height - self.canvas.winfo_height() + 2 * VSTEP,
+                    self.page_height - self.canvas.winfo_height() + 2 * VSTEP,
                 ]
             )
         else:
@@ -226,13 +244,16 @@ class Browser:
             logger.error("The HTML tree is empty, did you call .parse()?")
             return
 
-        self.layout = Layout(self.parser.root, self.canvas.winfo_width())
+        self.document = DocumentLayout(self.parser.root)
+        self.document.layout(self.canvas.winfo_width())
+        self.page_height = self.document.get_full_page_height()
+
         self.draw()
 
     def draw(self):
         height = self.canvas.winfo_height()
 
-        for x, y, c, font in self.layout.display_list:
+        for x, y, c, font in self.document.display_list:
             is_before_viewport = y > self.scroll + height
             is_after_viewport = y + VSTEP < self.scroll
 
