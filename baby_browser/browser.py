@@ -12,7 +12,10 @@ from baby_browser.utils import format_bytes
 
 logger = get_logger(__name__)
 
-HSTEP, VSTEP = 13, 18
+WINDOW_H_MARGIN = 13
+WINDOW_V_MARGIN = 18
+
+VSTEP = 18
 SCROLL_STEP = 3 * VSTEP
 
 FontWeight = Literal["normal", "bold"]
@@ -66,28 +69,66 @@ def _get_font(size: int, weight: FontWeight, slant: FontSlant) -> Font:
 
 
 class BlockLayout:
-    def __init__(self, html_tree_root: Node, parent: "DocumentLayout", previous: Optional[Node] = None):
+    x: float
+    y: float
+    width: float
+    height: float
+
+    def __init__(
+        self,
+        html_tree_root: Node,
+        parent: "DocumentLayout | BlockLayout",
+        previous: Optional["BlockLayout"] = None,
+    ):
         self.html_tree_root = html_tree_root
-        self.width = 0
 
-        self._parent = parent
-        self._previous = previous
-        self._children = []
+        self.parent = parent
+        self.previous = previous
+        self.children: list["BlockLayout"] = []
 
-    def layout(self, width: float):
-        self.width = width
+    def layout(self):
         self.display_list = []
-        self._line = []
-        self.cursor_x: float = HSTEP
-        self.cursor_y: float = VSTEP
 
-        self.weight: FontWeight = "normal"
-        self.style: FontSlant = "roman"
-        self.font_size = 16
+        self.x = self.parent.x
+        self.y = (
+            self.previous.y + self.previous.height if self.previous else self.parent.y
+        )
+        self.width = self.parent.width
 
-        self._render_tree(self.html_tree_root)
+        mode = self.html_tree_root.get_layout_mode()
 
-        self._flush_line()
+        if mode == "block":
+            self._layout_intermediate()
+
+            self.height = sum([child.height for child in self.children], 0.0)
+        else:
+            self._line = []
+            self.cursor_x: float = 0
+            self.cursor_y: float = 0
+
+            self.weight: FontWeight = "normal"
+            self.style: FontSlant = "roman"
+            self.font_size = 16
+
+            self._render_tree(self.html_tree_root)
+
+            self._flush_line()
+
+            self.height = self.cursor_y
+
+    def _layout_intermediate(self):
+        previous = None
+
+        for child in self.html_tree_root.children:
+            next = BlockLayout(child, self, previous)
+            self.children.append(next)
+            previous = next
+
+        for child in self.children:
+            child.layout()
+
+        for child in self.children:
+            self.display_list.extend(child.display_list)
 
     def _flush_line(self):
         if not self._line:
@@ -104,11 +145,12 @@ class BlockLayout:
             [font.metrics("descent") for x, word, font in self._line]
         )
 
-        for x, word, font in self._line:
-            y = baseline - font.metrics("ascent")
+        for relative_x, word, font in self._line:
+            x = self.x + relative_x
+            y = self.y + baseline - font.metrics("ascent")
             self.display_list.append((x, y, word, font))
 
-        self.cursor_x = HSTEP
+        self.cursor_x = 0
         self.cursor_y = baseline + 1.25 * max_descent
         self._line = []
 
@@ -159,7 +201,7 @@ class BlockLayout:
         word_width = font.measure(word)
 
         # Break line on word
-        if self.cursor_x + word_width > self.width - HSTEP:
+        if self.cursor_x + word_width > self.width:
             self._flush_line()
 
         self._line.append((self.cursor_x, word, font))
@@ -175,9 +217,15 @@ class DocumentLayout:
         self.display_list = []
 
     def layout(self, width: float):
+        self.width = width - 2 * WINDOW_H_MARGIN
+        self.x = WINDOW_H_MARGIN
+        self.y = WINDOW_V_MARGIN
+
         child = BlockLayout(self.node, self, None)
         self.children.append(child)
-        child.layout(width)
+        child.layout()
+        self.height = child.height + 2 * WINDOW_V_MARGIN
+
         self.display_list = child.display_list
 
     def get_full_page_height(self) -> float:

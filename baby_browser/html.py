@@ -1,6 +1,6 @@
 from dataclasses import field, dataclass
 from html import unescape
-from typing import Optional
+from typing import Literal, Optional
 from baby_browser.logger import get_logger
 
 from baby_browser.utils import timed
@@ -38,6 +38,46 @@ HEAD_TAGS = [
     "script",
 ]
 
+BLOCK_ELEMENTS = [
+    "html",
+    "body",
+    "article",
+    "section",
+    "nav",
+    "aside",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hgroup",
+    "header",
+    "footer",
+    "address",
+    "p",
+    "hr",
+    "pre",
+    "blockquote",
+    "ol",
+    "ul",
+    "menu",
+    "li",
+    "dl",
+    "dt",
+    "dd",
+    "figure",
+    "figcaption",
+    "main",
+    "div",
+    "table",
+    "form",
+    "fieldset",
+    "legend",
+    "details",
+    "summary",
+]
+
 
 def _convert_html_entity(value: str) -> str:
     return unescape(f"&{value};")
@@ -57,10 +97,24 @@ class Node:
     children: list["Node"] = field(default_factory=list, init=False)
     parent: Optional["Node"] = None
 
+    @property
+    def is_block_element(self) -> bool:
+        return False
+
+    @property
+    def is_inline_element(self) -> bool:
+        return not self.is_block_element
+
+    def get_layout_mode(self) -> Literal["inline", "block"]:
+        return "block"
+
 
 @dataclass
 class Text(Node):
     text: str = field(kw_only=True)
+
+    def get_layout_mode(self) -> Literal["inline", "block"]:
+        return "inline"
 
     def __repr__(self) -> str:
         return repr(self.text)
@@ -70,6 +124,16 @@ class Text(Node):
 class Element(Node):
     tag: str = field(kw_only=True)
     attributes: dict[str, str | None] = field(default_factory=dict)
+
+    @property
+    def is_block_element(self) -> bool:
+        return self.tag in BLOCK_ELEMENTS
+
+    def get_layout_mode(self) -> Literal["inline", "block"]:
+        if any([child.is_block_element for child in self.children or [self]]):
+            return "block"
+        else:
+            return "inline"
 
     def __repr__(self) -> str:
         return f"<{self.tag} {self.attributes}>"
