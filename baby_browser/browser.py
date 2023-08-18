@@ -89,10 +89,14 @@ class BlockLayout:
     def layout(self):
         self.display_list = []
 
+        # x pos starts at its parent x
         self.x = self.parent.x
+        # if there's a sibling, it starts below it, otherwise it starts
+        # at its parent top edge
         self.y = (
             self.previous.y + self.previous.height if self.previous else self.parent.y
         )
+        # fills the horizontal space
         self.width = self.parent.width
 
         mode = self.html_tree_root.get_layout_mode()
@@ -116,6 +120,13 @@ class BlockLayout:
 
             self.height = self.cursor_y
 
+    def paint(self, display_list: list):
+        if self.html_tree_root.get_layout_mode() == "block":
+            for child in self.children:
+                child.paint(display_list)
+        else:
+            display_list.extend(self.display_list)
+
     def _layout_intermediate(self):
         previous = None
 
@@ -126,9 +137,6 @@ class BlockLayout:
 
         for child in self.children:
             child.layout()
-
-        for child in self.children:
-            self.display_list.extend(child.display_list)
 
     def _flush_line(self):
         if not self._line:
@@ -213,23 +221,25 @@ class DocumentLayout:
     def __init__(self, node: Node) -> None:
         self.node = node
         self.parent = None
-        self.children = []
-        self.display_list = []
+        self.children: list[BlockLayout] = []
 
     def layout(self, width: float):
         self.width = width - 2 * WINDOW_H_MARGIN
+        self.height = 0
         self.x = WINDOW_H_MARGIN
         self.y = WINDOW_V_MARGIN
 
         child = BlockLayout(self.node, self, None)
-        self.children.append(child)
+
+        # Children should be reset at each layout
+        # as it's called at every windows resize
+        # and the DocumentLayout must always have 1 child
+        self.children = [child]
         child.layout()
         self.height = child.height + 2 * WINDOW_V_MARGIN
 
-        self.display_list = child.display_list
-
-    def get_full_page_height(self) -> float:
-        return self.display_list[-1][1] if len(self.display_list) > 0 else 0
+    def paint(self, display_list):
+        self.children[0].paint(display_list)
 
 
 class Browser:
@@ -243,6 +253,7 @@ class Browser:
             width=800,
             height=600,
         )
+        self.display_list = []
 
         self.canvas.pack(fill="both", expand=True)
 
@@ -253,7 +264,11 @@ class Browser:
 
     def _on_resize(self, event: tkinter.Event):
         self.document.layout(self.canvas.winfo_width())
-        self.page_height = self.document.get_full_page_height()
+
+        self.display_list = []
+        self.document.paint(self.display_list)
+
+        self.page_height = self.get_full_page_height()
 
         self.canvas.delete("all")
         self.draw()
@@ -273,7 +288,7 @@ class Browser:
             self.scroll = min(
                 [
                     self.scroll + scroll_delta,
-                    self.page_height - self.canvas.winfo_height() + 2 * VSTEP,
+                    self.page_height - self.canvas.winfo_height() + 2 * WINDOW_V_MARGIN,
                 ]
             )
         else:
@@ -294,16 +309,23 @@ class Browser:
 
         self.document = DocumentLayout(self.parser.root)
         self.document.layout(self.canvas.winfo_width())
-        self.page_height = self.document.get_full_page_height()
+
+        self.display_list = []
+        self.document.paint(self.display_list)
+
+        self.page_height = self.get_full_page_height()
 
         self.draw()
+
+    def get_full_page_height(self) -> float:
+        return self.display_list[-1][1] if len(self.display_list) > 0 else 0
 
     def draw(self):
         height = self.canvas.winfo_height()
 
-        for x, y, c, font in self.document.display_list:
+        for x, y, c, font in self.display_list:
             is_before_viewport = y > self.scroll + height
-            is_after_viewport = y + VSTEP < self.scroll
+            is_after_viewport = y + WINDOW_V_MARGIN < self.scroll
 
             # If the text is not visible skip the rendering
             if is_before_viewport or is_after_viewport:

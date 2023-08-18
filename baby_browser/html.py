@@ -97,6 +97,8 @@ class Node:
     children: list["Node"] = field(default_factory=list, init=False)
     parent: Optional["Node"] = None
 
+    # By default a Node is inline
+
     @property
     def is_block_element(self) -> bool:
         return False
@@ -106,15 +108,12 @@ class Node:
         return not self.is_block_element
 
     def get_layout_mode(self) -> Literal["inline", "block"]:
-        return "block"
+        return "block" if self.is_block_element else "inline"
 
 
 @dataclass
 class Text(Node):
     text: str = field(kw_only=True)
-
-    def get_layout_mode(self) -> Literal["inline", "block"]:
-        return "inline"
 
     def __repr__(self) -> str:
         return repr(self.text)
