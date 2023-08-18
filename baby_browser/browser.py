@@ -1,10 +1,11 @@
 import sys
 from time import time_ns
 import tkinter
-from tkinter.font import Font
-from typing import Literal, Optional
+from typing import Optional
+from baby_browser.fonts import FontSlant, FontWeight, get_font
 
 from baby_browser.html import Node, Element, Text, HTMLParser
+from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
 from baby_browser.utils import format_bytes
@@ -17,9 +18,6 @@ WINDOW_V_MARGIN = 18
 
 VSTEP = 18
 SCROLL_STEP = 3 * VSTEP
-
-FontWeight = Literal["normal", "bold"]
-FontSlant = Literal["roman", "italic"]
 
 
 def _load_page_content(url: str):
@@ -55,32 +53,20 @@ def _load_page_content(url: str):
     return html
 
 
-_fonts_cache = {}
-
-
-def _get_font(size: int, weight: FontWeight, slant: FontSlant) -> Font:
-    key = (size, weight, slant)
-
-    if key not in _fonts_cache:
-        font = Font(size=size, weight=weight, slant=slant)
-        _fonts_cache[key] = font
-
-    return _fonts_cache[key]
-
-
 class BlockLayout:
     x: float
     y: float
     width: float
     height: float
+    display_list: list[DrawCommand]
 
     def __init__(
         self,
-        html_tree_root: Node,
+        html_node: Node,
         parent: "DocumentLayout | BlockLayout",
         previous: Optional["BlockLayout"] = None,
     ):
-        self.html_tree_root = html_tree_root
+        self.html_node = html_node
 
         self.parent = parent
         self.previous = previous
@@ -99,7 +85,7 @@ class BlockLayout:
         # fills the horizontal space
         self.width = self.parent.width
 
-        mode = self.html_tree_root.get_layout_mode()
+        mode = self.html_node.get_layout_mode()
 
         if mode == "block":
             self._layout_intermediate()
@@ -114,14 +100,23 @@ class BlockLayout:
             self.style: FontSlant = "roman"
             self.font_size = 16
 
-            self._render_tree(self.html_tree_root)
+            self._render_tree(self.html_node)
 
             self._flush_line()
 
             self.height = self.cursor_y
 
     def paint(self, display_list: list):
-        if self.html_tree_root.get_layout_mode() == "block":
+        if isinstance(self.html_node, Element) and self.html_node.tag == "pre":
+            right = self.x + self.width
+            bottom = self.y + self.height
+            display_list.append(
+                DrawRect(
+                    top=self.y, left=self.x, bottom=bottom, right=right, color="grey"
+                )
+            )
+
+        if self.html_node.get_layout_mode() == "block":
             for child in self.children:
                 child.paint(display_list)
         else:
@@ -130,7 +125,7 @@ class BlockLayout:
     def _layout_intermediate(self):
         previous = None
 
-        for child in self.html_tree_root.children:
+        for child in self.html_node.children:
             next = BlockLayout(child, self, previous)
             self.children.append(next)
             previous = next
@@ -156,7 +151,7 @@ class BlockLayout:
         for relative_x, word, font in self._line:
             x = self.x + relative_x
             y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append((x, y, word, font))
+            self.display_list.append(DrawText(top=y, left=x, text=word, font=font))
 
         self.cursor_x = 0
         self.cursor_y = baseline + 1.25 * max_descent
@@ -200,7 +195,7 @@ class BlockLayout:
             self._close_tag(node)
 
     def _render_word(self, word: str):
-        font = _get_font(
+        font = get_font(
             size=self.font_size,
             weight=self.weight,
             slant=self.style,
@@ -247,13 +242,12 @@ class Browser:
         self.window = tkinter.Tk()
         self.window.wm_title("BabyBrowser")
         self.scroll = 0
-        self.page_height = 0
         self.canvas = tkinter.Canvas(
             self.window,
             width=800,
             height=600,
         )
-        self.display_list = []
+        self.display_list: list[DrawCommand] = []
 
         self.canvas.pack(fill="both", expand=True)
 
@@ -267,8 +261,6 @@ class Browser:
 
         self.display_list = []
         self.document.paint(self.display_list)
-
-        self.page_height = self.get_full_page_height()
 
         self.canvas.delete("all")
         self.draw()
@@ -286,10 +278,8 @@ class Browser:
 
         if self.scroll + scroll_delta >= 0:
             self.scroll = min(
-                [
-                    self.scroll + scroll_delta,
-                    self.page_height - self.canvas.winfo_height() + 2 * WINDOW_V_MARGIN,
-                ]
+                self.scroll + scroll_delta,
+                self.document.height - self.canvas.winfo_height(),
             )
         else:
             self.scroll = 0
@@ -313,22 +303,17 @@ class Browser:
         self.display_list = []
         self.document.paint(self.display_list)
 
-        self.page_height = self.get_full_page_height()
-
         self.draw()
-
-    def get_full_page_height(self) -> float:
-        return self.display_list[-1][1] if len(self.display_list) > 0 else 0
 
     def draw(self):
         height = self.canvas.winfo_height()
 
-        for x, y, c, font in self.display_list:
-            is_before_viewport = y > self.scroll + height
-            is_after_viewport = y + WINDOW_V_MARGIN < self.scroll
+        for command in self.display_list:
+            is_before_viewport = command.bottom < self.scroll
+            is_after_viewport = command.top > self.scroll + height
 
             # If the text is not visible skip the rendering
             if is_before_viewport or is_after_viewport:
                 continue
 
-            self.canvas.create_text(x, y - self.scroll, text=c, font=font, anchor="nw")
+            command.execute(self.scroll, self.canvas)
