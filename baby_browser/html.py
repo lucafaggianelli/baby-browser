@@ -129,7 +129,7 @@ class Element(Node):
         return self.tag in BLOCK_ELEMENTS
 
     def get_layout_mode(self) -> Literal["inline", "block"]:
-        if any([child.is_block_element for child in self.children or [self]]):
+        if any([child.is_block_element for child in (self.children or [self])]):
             return "block"
         else:
             return "inline"
