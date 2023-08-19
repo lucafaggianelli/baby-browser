@@ -18,6 +18,7 @@ WINDOW_V_MARGIN = 18
 
 VSTEP = 18
 SCROLL_STEP = 3 * VSTEP
+SCROLLBAR_WIDTH = 15
 
 
 def _load_page_content(url: str):
@@ -219,7 +220,7 @@ class DocumentLayout:
         self.children: list[BlockLayout] = []
 
     def layout(self, width: float):
-        self.width = width - 2 * WINDOW_H_MARGIN
+        self.width = width - 2 * WINDOW_H_MARGIN - SCROLLBAR_WIDTH
         self.height = 0
         self.x = WINDOW_H_MARGIN
         self.y = WINDOW_V_MARGIN
@@ -257,7 +258,12 @@ class Browser:
         self.window.bind("<MouseWheel>", self._on_scroll)
 
     def _on_resize(self, event: tkinter.Event):
-        self.document.layout(self.canvas.winfo_width())
+        window_width = self.canvas.winfo_width()
+
+        if window_width <= 1:
+            return
+
+        self.document.layout(window_width)
 
         self.display_list = []
         self.document.paint(self.display_list)
@@ -277,15 +283,59 @@ class Browser:
                 scroll_delta += SCROLL_STEP
 
         if self.scroll + scroll_delta >= 0:
-            self.scroll = min(
-                self.scroll + scroll_delta,
-                self.document.height - self.canvas.winfo_height(),
-            )
+            max_scroll = self.document.height - self.canvas.winfo_height()
+            self.scroll = min(self.scroll + scroll_delta, max_scroll)
         else:
             self.scroll = 0
 
         self.canvas.delete("all")
         self.draw()
+
+    def _render_scrollbar(self):
+        window_height = self.canvas.winfo_height()
+        window_width = self.canvas.winfo_width()
+
+        padding_x = 2
+        # Handler Width = full width - padding - border width
+        handler_width = SCROLLBAR_WIDTH - 2 * padding_x - 1
+        handler_height = window_height * (window_height / self.document.height)
+
+        handler_y = (
+            (window_height - handler_height)
+            * self.scroll
+            / (self.document.height - window_height)
+        )
+
+        print(handler_height, handler_y)
+
+        # Border
+        self.canvas.create_line(
+            window_width - SCROLLBAR_WIDTH,
+            0,
+            window_width - SCROLLBAR_WIDTH,
+            window_height,
+            fill="#3e3e3e",
+        )
+
+        # Background
+        self.canvas.create_rectangle(
+            window_width - handler_width - 2 * padding_x,
+            0,
+            window_width,
+            window_height,
+            fill="#2c2c2c",
+            width=0,
+        )
+
+        # Handler
+        self.canvas.create_rectangle(
+            window_width - handler_width - padding_x + 1,
+            handler_y,
+            window_width - padding_x,
+            handler_y + handler_height,
+            fill="#6b6b6b",
+            width=0,
+        )
 
     def load_page(self, url: str):
         html = _load_page_content(url)
@@ -317,3 +367,5 @@ class Browser:
                 continue
 
             command.execute(self.scroll, self.canvas)
+
+        self._render_scrollbar()
