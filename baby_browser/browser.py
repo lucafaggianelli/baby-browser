@@ -4,7 +4,7 @@ import tkinter
 from typing import Optional
 from baby_browser.fonts import FontSlant, FontWeight, get_font
 
-from baby_browser.html import Node, Element, Text, HTMLParser
+from baby_browser.html import HIDDEN_ELEMENTS, Node, Element, Text, HTMLParser
 from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
@@ -128,6 +128,14 @@ class BlockLayout:
 
         for child in self.html_node.children:
             next = BlockLayout(child, self, previous)
+
+            if (
+                isinstance(self.html_node, Element)
+                and self.html_node.tag in HIDDEN_ELEMENTS
+            ):
+                print("Skipped head")
+                continue
+
             self.children.append(next)
             previous = next
 
@@ -188,6 +196,9 @@ class BlockLayout:
             for word in node.text.split():
                 self._render_word(word)
         elif isinstance(node, Element):
+            if node.tag in HIDDEN_ELEMENTS:
+                return
+
             self._open_tag(node)
 
             for child in node.children:
@@ -305,8 +316,6 @@ class Browser:
             * self.scroll
             / (self.document.height - window_height)
         )
-
-        print(handler_height, handler_y)
 
         # Border
         self.canvas.create_line(

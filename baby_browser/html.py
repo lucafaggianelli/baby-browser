@@ -78,6 +78,13 @@ BLOCK_ELEMENTS = [
     "summary",
 ]
 
+HIDDEN_ELEMENTS = [
+    "head",
+    "script",
+    "style",
+    "title",
+]
+
 
 def _convert_html_entity(value: str) -> str:
     return unescape(f"&{value};")
