@@ -11,6 +11,17 @@
       "program": "${workspaceFolder}/cli.py",
       "console": "integratedTerminal",
       "justMyCode": true
+    },
+    {
+      "name": "Run with URL",
+      "type": "python",
+      "request": "launch",
+      "program": "${workspaceFolder}/cli.py",
+      "args": [
+        "https://browser.engineering/layout.html"
+      ],
+      "console": "integratedTerminal",
+      "justMyCode": true
     }
   ]
 }
