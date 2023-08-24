@@ -1,14 +1,16 @@
+from pathlib import Path
 import sys
 from time import time_ns
 import tkinter
 from typing import Optional
+from baby_browser.css import CSSParser, CSSSelector
 from baby_browser.fonts import FontSlant, FontWeight, get_font
 
 from baby_browser.html import HIDDEN_ELEMENTS, Node, Element, Text, HTMLParser
 from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
 from baby_browser.logger import get_logger
 from baby_browser.networking import fetch, parse_url
-from baby_browser.utils import format_bytes
+from baby_browser.utils import format_bytes, tree_to_list
 
 
 logger = get_logger(__name__)
@@ -19,6 +21,8 @@ WINDOW_V_MARGIN = 18
 VSTEP = 18
 SCROLL_STEP = 3 * VSTEP
 SCROLLBAR_WIDTH = 15
+
+DEFAULT_CSS = Path(__file__).parent / "default.css"
 
 
 def _load_page_content(url: str):
@@ -52,6 +56,24 @@ def _load_page_content(url: str):
     )
 
     return html
+
+
+def style(node: Node, rules: list[tuple[CSSSelector, dict]]):
+    node.style = {}
+
+    for selector, body in rules:
+        if not selector.matches(node):
+            continue
+
+        for property, value in body.items():
+            node.style[property] = value
+
+    if isinstance(node, Element) and "style" in node.attributes:
+        pairs = CSSParser(node.attributes.get("style") or "").parse_rule_body()
+        node.style.update(pairs)
+
+    for child in node.children:
+        style(child, rules)
 
 
 class BlockLayout:
@@ -108,12 +130,14 @@ class BlockLayout:
             self.height = self.cursor_y
 
     def paint(self, display_list: list):
-        if isinstance(self.html_node, Element) and self.html_node.tag == "pre":
+        bgcolor = self.html_node.style.get("background-color", "transparent")
+
+        if bgcolor != "transparent":
             right = self.x + self.width
             bottom = self.y + self.height
             display_list.append(
                 DrawRect(
-                    top=self.y, left=self.x, bottom=bottom, right=right, color="grey"
+                    top=self.y, left=self.x, bottom=bottom, right=right, color=bgcolor
                 )
             )
 
@@ -268,6 +292,9 @@ class Browser:
         self.window.bind("<Up>", self._on_scroll)
         self.window.bind("<MouseWheel>", self._on_scroll)
 
+        with DEFAULT_CSS.open("r", encoding="utf-8") as f:
+            self.default_style_sheet = CSSParser(f.read()).parse_css()
+
     def _on_resize(self, event: tkinter.Event):
         window_width = self.canvas.winfo_width()
 
@@ -355,6 +382,17 @@ class Browser:
         if not self.parser.root:
             logger.error("The HTML tree is empty, did you call .parse()?")
             return
+
+        links = [
+            node for node in tree_to_list(self.parser.root, [])
+            if isinstance(node, Element) and node.tag == "link" and node.attributes.get("rel") == "stylesheet"
+            and "href" in node.attributes
+        ]
+
+        print(links)
+
+        rules = self.default_style_sheet.copy()
+        style(self.parser.root, rules)
 
         self.document = DocumentLayout(self.parser.root)
         self.document.layout(self.canvas.winfo_width())

@@ -1,8 +1,8 @@
 from dataclasses import field, dataclass
 from html import unescape
 from typing import Literal, Optional
-from baby_browser.logger import get_logger
 
+from baby_browser.logger import get_logger
 from baby_browser.utils import timed
 
 
@@ -103,6 +103,7 @@ def _unquote_string(value: str) -> str:
 class Node:
     children: list["Node"] = field(default_factory=list, init=False)
     parent: Optional["Node"] = None
+    style: dict[str, str] = field(default_factory=dict, init=False)
 
     # By default a Node is inline
 

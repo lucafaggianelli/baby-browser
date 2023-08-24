@@ -28,3 +28,10 @@ def timed(logger: Logger):
         return wrapper
 
     return timed_inner
+
+
+def tree_to_list(tree, flat: list):
+    flat.append(tree)
+    for child in tree.children:
+        tree_to_list(child, flat)
+    return flat
