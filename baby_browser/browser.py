@@ -207,36 +207,13 @@ class BlockLayout:
         for relative_x, word, font, color in self._line:
             x = self.x + relative_x
             y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append(DrawText(top=y, left=x, text=word, font=font, color=color))
+            self.display_list.append(
+                DrawText(top=y, left=x, text=word, font=font, color=color)
+            )
 
         self.cursor_x = 0
         self.cursor_y = baseline + 1.25 * max_descent
         self._line = []
-
-    def _open_tag(self, element: Element):
-        if element.tag in ("i", "em"):
-            self.style = "italic"
-        elif element.tag in ("b", "strong"):
-            self.weight = "bold"
-        elif element.tag == "small":
-            self.font_size -= 2
-        elif element.tag == "big":
-            self.font_size += 4
-        elif element.tag == "br":
-            self._flush_line()
-
-    def _close_tag(self, element: Element):
-        if element.tag in ("i", "em"):
-            self.style = "roman"
-        elif element.tag in ("b", "strong"):
-            self.weight = "normal"
-        elif element.tag == "small":
-            self.font_size += 2
-        elif element.tag == "big":
-            self.font_size -= 4
-        elif element.tag == "p":
-            self._flush_line()
-            self.cursor_y += VSTEP
 
     def _render_tree(self, node: Node):
         if isinstance(node, Text):
@@ -246,12 +223,11 @@ class BlockLayout:
             if node.tag in HIDDEN_ELEMENTS:
                 return
 
-            self._open_tag(node)
+            if node.tag == "br":
+                self._flush_line()
 
             for child in node.children:
                 self._render_tree(child)
-
-            self._close_tag(node)
 
     def _render_word(self, node: Node, word: str):
         font = self.get_font(node)
