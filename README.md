@@ -45,3 +45,7 @@ Implementing a minimal WebBrowser following the great book at https://browser.en
 - [ ] Scripts
 - [ ] Quoted attributes
 - [ ] Syntax Highlighting
+
+### 5.
+
+### 6. Style
