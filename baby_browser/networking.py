@@ -30,6 +30,24 @@ class URL:
     path: str = ""
     port: int = 80
 
+    @staticmethod
+    def parse(url: str):
+        return parse_url(url)
+
+    def resolve(self, url: str) -> "URL":
+        if "://" in url:
+            return URL.parse(url)
+
+        if not url.startswith("/"):
+            dir, _ = self.path.rsplit("/", 1)
+            while url.startswith("../"):
+                _, url = url.split("/", 1)
+                if "/" in dir:
+                    dir, _ = dir.rsplit("/", 1)
+            url = dir + "/" + url
+
+        return URL(self.scheme, self.host, url, self.port)
+
     def __str__(self) -> str:
         return f"{self.scheme}://{self.host}:{self.port}{self.path}"
 
@@ -269,7 +287,11 @@ def _fetch_inner(
         cache_control = _parse_header_with_attributes(cache_control)
 
         if max_age := cache_control.get("max-age"):
-            if (max_age := int(max_age)) > 0 and response.status_code in [200, 301, 404]:
+            if (max_age := int(max_age)) > 0 and response.status_code in [
+                200,
+                301,
+                404,
+            ]:
                 logger.debug("Caching response")
                 write_cache(
                     url,

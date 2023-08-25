@@ -9,7 +9,7 @@ from baby_browser.fonts import FontSlant, FontWeight, get_font
 from baby_browser.html import HIDDEN_ELEMENTS, Node, Element, Text, HTMLParser
 from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
 from baby_browser.logger import get_logger
-from baby_browser.networking import fetch, parse_url
+from baby_browser.networking import URL, fetch
 from baby_browser.utils import format_bytes, tree_to_list
 
 
@@ -25,14 +25,12 @@ SCROLLBAR_WIDTH = 15
 DEFAULT_CSS = Path(__file__).parent / "default.css"
 
 
-def _load_page_content(url: str):
-    parsed_url = parse_url(url)
-
+def _load_page_content(url: URL):
     html = ""
     t0 = time_ns()
 
-    if parsed_url.scheme in ("http", "https"):
-        response = fetch(parsed_url)
+    if url.scheme in ("http", "https"):
+        response = fetch(url)
 
         if response.status_code != 200:
             logger.error(
@@ -42,11 +40,11 @@ def _load_page_content(url: str):
             sys.exit(1)
 
         html = response.body
-    elif parsed_url.scheme == "file":
-        with open(parsed_url.path, "r") as f:
+    elif url.scheme == "file":
+        with open(url.path, "r") as f:
             html = f.read()
-    elif parsed_url.scheme == "data":
-        mime_type, content = parsed_url.path.split(",", 1)
+    elif url.scheme == "data":
+        mime_type, content = url.path.split(",", 1)
         html = content
     else:
         raise ValueError(f"URL scheme not supported: {url}")
@@ -58,8 +56,22 @@ def _load_page_content(url: str):
     return html
 
 
+INHERITED_PROPERTIES = {
+    "font-size": "16px",
+    "font-style": "normal",
+    "font-weight": "normal",
+    "color": "black",
+}
+
+
 def style(node: Node, rules: list[tuple[CSSSelector, dict]]):
     node.style = {}
+
+    for property, default_value in INHERITED_PROPERTIES.items():
+        if node.parent:
+            node.style[property] = node.parent.style[property]
+        else:
+            node.style[property] = default_value
 
     for selector, body in rules:
         if not selector.matches(node):
@@ -71,6 +83,17 @@ def style(node: Node, rules: list[tuple[CSSSelector, dict]]):
     if isinstance(node, Element) and "style" in node.attributes:
         pairs = CSSParser(node.attributes.get("style") or "").parse_rule_body()
         node.style.update(pairs)
+
+    if node.style["font-size"].endswith("%"):
+        if node.parent:
+            parent_font_size = node.parent.style["font-size"]
+        else:
+            parent_font_size = INHERITED_PROPERTIES["font-size"]
+
+        node_percentage = float(node.style["font-style"][:-1]) / 100
+        parent_font_size = float(parent_font_size[:-2])
+
+        node.style["font-style"] = f"{parent_font_size * node_percentage}px"
 
     for child in node.children:
         style(child, rules)
@@ -172,19 +195,19 @@ class BlockLayout:
 
         # Tallest word in the line
         max_ascent: float = max(
-            [font.metrics("ascent") for x, word, font in self._line]
+            [font.metrics("ascent") for x, word, font, color in self._line]
         )
         baseline = self.cursor_y + 1.25 * max_ascent
 
         # Biggest descent in the line
         max_descent: float = max(
-            [font.metrics("descent") for x, word, font in self._line]
+            [font.metrics("descent") for x, word, font, color in self._line]
         )
 
-        for relative_x, word, font in self._line:
+        for relative_x, word, font, color in self._line:
             x = self.x + relative_x
             y = self.y + baseline - font.metrics("ascent")
-            self.display_list.append(DrawText(top=y, left=x, text=word, font=font))
+            self.display_list.append(DrawText(top=y, left=x, text=word, font=font, color=color))
 
         self.cursor_x = 0
         self.cursor_y = baseline + 1.25 * max_descent
@@ -218,7 +241,7 @@ class BlockLayout:
     def _render_tree(self, node: Node):
         if isinstance(node, Text):
             for word in node.text.split():
-                self._render_word(word)
+                self._render_word(node, word)
         elif isinstance(node, Element):
             if node.tag in HIDDEN_ELEMENTS:
                 return
@@ -230,12 +253,8 @@ class BlockLayout:
 
             self._close_tag(node)
 
-    def _render_word(self, word: str):
-        font = get_font(
-            size=self.font_size,
-            weight=self.weight,
-            slant=self.style,
-        )
+    def _render_word(self, node: Node, word: str):
+        font = self.get_font(node)
 
         word_width = font.measure(word)
 
@@ -243,9 +262,17 @@ class BlockLayout:
         if self.cursor_x + word_width > self.width:
             self._flush_line()
 
-        self._line.append((self.cursor_x, word, font))
+        self._line.append((self.cursor_x, word, font, node.style["color"]))
 
         self.cursor_x += word_width + font.measure(" ")
+
+    def get_font(self, node: Node):
+        weight = node.style["font-weight"]
+        style = node.style["font-style"]
+        if style == "normal":
+            style = "roman"
+        size = int(float(node.style["font-size"][:-2]) * 0.75)
+        return get_font(size, weight, style)
 
 
 class DocumentLayout:
@@ -282,6 +309,7 @@ class Browser:
             self.window,
             width=800,
             height=600,
+            bg="white",
         )
         self.display_list: list[DrawCommand] = []
 
@@ -373,7 +401,9 @@ class Browser:
             width=0,
         )
 
-    def load_page(self, url: str):
+    def load_page(self, url_raw: str):
+        url = URL.parse(url_raw)
+
         html = _load_page_content(url)
 
         self.parser = HTMLParser(html)
@@ -384,15 +414,27 @@ class Browser:
             return
 
         links = [
-            node for node in tree_to_list(self.parser.root, [])
-            if isinstance(node, Element) and node.tag == "link" and node.attributes.get("rel") == "stylesheet"
+            node.attributes.get("href") or ""
+            for node in tree_to_list(self.parser.root, [])
+            if isinstance(node, Element)
+            and node.tag == "link"
+            and node.attributes.get("rel") == "stylesheet"
             and "href" in node.attributes
         ]
 
-        print(links)
-
         rules = self.default_style_sheet.copy()
-        style(self.parser.root, rules)
+
+        def cascade_priority(rule: tuple[CSSSelector, dict]):
+            selector, body = rule
+            return selector.priority
+
+        style(self.parser.root, sorted(rules, key=cascade_priority))
+
+        for link in links:
+            print(link)
+            response = fetch(url.resolve(link))
+
+            rules.extend(CSSParser(response.body).parse_css())
 
         self.document = DocumentLayout(self.parser.root)
         self.document.layout(self.canvas.winfo_width())

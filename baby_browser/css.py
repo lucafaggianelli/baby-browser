@@ -5,6 +5,8 @@ logger = get_logger(__name__)
 
 
 class CSSSelector:
+    priority: int = 1
+
     def matches(self, node: Node) -> bool:
         return False
 
@@ -24,6 +26,7 @@ class DescendantSelector(CSSSelector):
     def __init__(self, ancestor: CSSSelector, descendant: CSSSelector):
         self.ancestor = ancestor
         self.descendant = descendant
+        self.priority = ancestor.priority + descendant.priority
 
     def matches(self, node: Node) -> bool:
         if not self.descendant.matches(node):
