@@ -1,5 +1,6 @@
 from functools import wraps
 from logging import Logger
+import platform
 from time import time_ns
 
 
@@ -35,3 +36,7 @@ def tree_to_list(tree, flat: list):
     for child in tree.children:
         tree_to_list(child, flat)
     return flat
+
+
+def is_windows():
+    return platform.system() == "Windows"

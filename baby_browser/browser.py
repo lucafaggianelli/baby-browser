@@ -1,5 +1,4 @@
 from pathlib import Path
-import platform
 import sys
 from time import time_ns
 import tkinter
@@ -11,7 +10,7 @@ from baby_browser.html import HIDDEN_ELEMENTS, Node, Element, Text, HTMLParser
 from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
 from baby_browser.logger import get_logger
 from baby_browser.networking import URL, fetch
-from baby_browser.utils import format_bytes, tree_to_list
+from baby_browser.utils import format_bytes, is_windows, tree_to_list
 
 
 logger = get_logger(__name__)
@@ -44,7 +43,7 @@ def _load_page_content(url: URL):
     elif url.scheme == "file":
         filepath = url.path
 
-        if platform.system().lower() == "windows":
+        if is_windows():
             filepath = filepath.lstrip("/")
 
         with open(filepath, "r") as f:
@@ -324,6 +323,10 @@ class Browser:
 
         if event.type == tkinter.EventType.MouseWheel:
             scroll_delta -= event.delta * SCROLL_STEP
+
+            if is_windows():
+                scroll_delta /= 120
+
         elif event.type == tkinter.EventType.KeyPress:
             if event.keysym == "Down":
                 scroll_delta -= SCROLL_STEP
