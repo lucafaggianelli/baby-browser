@@ -1,4 +1,5 @@
 from pathlib import Path
+import platform
 import sys
 from time import time_ns
 import tkinter
@@ -41,7 +42,12 @@ def _load_page_content(url: URL):
 
         html = response.body
     elif url.scheme == "file":
-        with open(url.path, "r") as f:
+        filepath = url.path
+
+        if platform.system().lower() == "windows":
+            filepath = filepath.lstrip("/")
+
+        with open(filepath, "r") as f:
             html = f.read()
     elif url.scheme == "data":
         mime_type, content = url.path.split(",", 1)

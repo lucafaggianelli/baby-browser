@@ -5,9 +5,9 @@ import tkinter
 from baby_browser.browser import Browser
 
 
-DEFAULT_HTML_URI = "file://" + str(
+DEFAULT_HTML_URI = (
     pathlib.Path(__file__).parent / ".." / "browser.engineering.html"
-)
+).as_uri()
 
 
 def main():

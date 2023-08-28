@@ -28,7 +28,7 @@ class URL:
     scheme: str
     host: Optional[str] = None
     path: str = ""
-    port: int = 80
+    port: Optional[int] = 80
 
     @staticmethod
     def parse(url: str):
@@ -164,10 +164,16 @@ def parse_url(url: str):
     host_parts = parts[0].split(":", 1)
 
     host = host_parts[0]
+
     port = host_parts[1] if len(host_parts) == 2 else _get_scheme_default_port(scheme)
+    if port:
+        port = int(port)
+    else:
+        port = None
+
     path = "/" + (parts[1] if len(parts) == 2 else "")
 
-    return URL(scheme, host, path, int(port))
+    return URL(scheme, host, path, port)
 
 
 def _encode_http_request(lines: List[str]):
