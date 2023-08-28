@@ -96,10 +96,10 @@ def style(node: Node, rules: list[tuple[CSSSelector, dict]]):
         else:
             parent_font_size = INHERITED_PROPERTIES["font-size"]
 
-        node_percentage = float(node.style["font-style"][:-1]) / 100
+        node_percentage = float(node.style["font-size"][:-1]) / 100
         parent_font_size = float(parent_font_size[:-2])
 
-        node.style["font-style"] = f"{parent_font_size * node_percentage}px"
+        node.style["font-size"] = f"{parent_font_size * node_percentage}px"
 
     for child in node.children:
         style(child, rules)
