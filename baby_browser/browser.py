@@ -62,6 +62,7 @@ def _load_page_content(url: URL):
 
 
 INHERITED_PROPERTIES = {
+    "font-family": "Times",
     "font-size": "16px",
     "font-style": "normal",
     "font-weight": "normal",
@@ -248,12 +249,15 @@ class BlockLayout:
         self.cursor_x += word_width + font.measure(" ")
 
     def get_font(self, node: Node):
+        family = node.style["font-family"]
         weight = node.style["font-weight"]
         style = node.style["font-style"]
+
         if style == "normal":
             style = "roman"
+
         size = int(float(node.style["font-size"][:-2]) * 0.75)
-        return get_font(size, weight, style)
+        return get_font(family, size, weight, style)
 
 
 class DocumentLayout:
@@ -416,8 +420,12 @@ class Browser:
         style(self.parser.root, sorted(rules, key=cascade_priority))
 
         for link in links:
-            print(link)
-            response = fetch(url.resolve(link))
+            try:
+                response = fetch(url.resolve(link))
+            except Exception as err:
+                logger.error("Couldn't retrieve file %s", link)
+                print(err)
+                continue
 
             rules.extend(CSSParser(response.body).parse_css())
 

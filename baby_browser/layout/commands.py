@@ -20,7 +20,7 @@ class DrawCommand:
 class DrawText(DrawCommand):
     bottom: float = field(init=False)
     text: str = field(default="")
-    font: Font = field(default_factory=lambda: get_font(16, "normal", "roman"))
+    font: Font = field(default_factory=lambda: get_font("Times", 16, "normal", "roman"))
     color: str = field(default="black")
 
     def __post_init__(self):
