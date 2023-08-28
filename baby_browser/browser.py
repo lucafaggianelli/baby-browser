@@ -134,8 +134,17 @@ class BlockLayout:
         self.y = (
             self.previous.y + self.previous.height if self.previous else self.parent.y
         )
-        # fills the horizontal space
-        self.width = self.parent.width
+
+        if width := self.html_node.style.get("width", "auto") != "auto":
+            # width: explicit
+            self.width = width
+            logger.debug("Explicit width %f", self.width)
+        else:
+            # width: auto, fills the horizontal space
+            self.width = self.parent.width
+
+        if height := self.html_node.style.get("height", "auto") != "auto":
+            self.height = height
 
         mode = self.html_node.get_layout_mode()
 
@@ -148,15 +157,13 @@ class BlockLayout:
             self.cursor_x: float = 0
             self.cursor_y: float = 0
 
-            self.weight: FontWeight = "normal"
-            self.style: FontSlant = "roman"
-            self.font_size = 16
-
             self._render_tree(self.html_node)
 
             self._flush_line()
 
-            self.height = self.cursor_y
+            if self.height is not None:
+                self.height = self.cursor_y
+                logger.debug("Explicit height %f", self.height)
 
     def paint(self, display_list: list):
         bgcolor = self.html_node.style.get("background-color", "transparent")
