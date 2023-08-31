@@ -4,7 +4,7 @@ from time import time_ns
 import tkinter
 from typing import Optional
 from baby_browser.css import CSSParser, CSSSelector
-from baby_browser.fonts import FontSlant, FontWeight, get_font
+from baby_browser.fonts import get_font
 
 from baby_browser.html import HIDDEN_ELEMENTS, Node, Element, Text, HTMLParser
 from baby_browser.layout.commands import DrawCommand, DrawRect, DrawText
@@ -145,6 +145,9 @@ class BlockLayout:
 
         if height := self.html_node.style.get("height", "auto") != "auto":
             self.height = height
+            logger.debug("Explicit height %f", self.height)
+        else:
+            self.height = 0
 
         mode = self.html_node.get_layout_mode()
 
@@ -161,9 +164,8 @@ class BlockLayout:
 
             self._flush_line()
 
-            if self.height is not None:
+            if not self.height:
                 self.height = self.cursor_y
-                logger.debug("Explicit height %f", self.height)
 
     def paint(self, display_list: list):
         bgcolor = self.html_node.style.get("background-color", "transparent")
@@ -420,12 +422,7 @@ class Browser:
 
         rules = self.default_style_sheet.copy()
 
-        def cascade_priority(rule: tuple[CSSSelector, dict]):
-            selector, body = rule
-            return selector.priority
-
-        style(self.parser.root, sorted(rules, key=cascade_priority))
-
+        # Download external stylesheets
         for link in links:
             try:
                 response = fetch(url.resolve(link))
@@ -435,6 +432,12 @@ class Browser:
                 continue
 
             rules.extend(CSSParser(response.body).parse_css())
+
+        def cascade_priority(rule: tuple[CSSSelector, dict]):
+            selector, _ = rule
+            return selector.priority
+
+        style(self.parser.root, sorted(rules, key=cascade_priority))
 
         self.document = DocumentLayout(self.parser.root)
         self.document.layout(self.canvas.winfo_width())

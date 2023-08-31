@@ -1,7 +1,9 @@
+import logging
 from baby_browser.html import Element, Node
 from baby_browser.logger import get_logger
 
 logger = get_logger(__name__)
+logger.setLevel(logging.WARNING)
 
 
 class CSSSelector:
@@ -22,6 +24,18 @@ class TagSelector(CSSSelector):
         return self.tag
 
 
+class ClassSelector(CSSSelector):
+    def __init__(self, class_name: str) -> None:
+        self.class_name = class_name.lstrip(".").strip()
+        self.priority = 10
+
+    def matches(self, node: Node) -> bool:
+        return isinstance(node, Element) and self.class_name in node.classes
+
+    def __repr__(self) -> str:
+        return f".{self.class_name}"
+
+
 class DescendantSelector(CSSSelector):
     def __init__(self, ancestor: CSSSelector, descendant: CSSSelector):
         self.ancestor = ancestor
@@ -38,6 +52,9 @@ class DescendantSelector(CSSSelector):
             node = node.parent
 
         return False
+
+    def __repr__(self) -> str:
+        return f"{self.ancestor} {self.descendant}"
 
 
 class ParsingError(Exception):
@@ -125,7 +142,7 @@ class CSSParser:
                 self._literal(";")
                 self._whitespace()
             except ParsingError as err:
-                logger.warning(err)
+                logger.debug(err)
 
                 why = self._ignore_until(";}")
 
@@ -138,12 +155,23 @@ class CSSParser:
         return pairs
 
     def _selector(self) -> CSSSelector:
-        out = TagSelector(self._word().lower())
+        word = self._word().lower()
+
+        if word.startswith("."):
+            out = ClassSelector(word)
+        else:
+            out = TagSelector(word)
 
         self._whitespace()
 
         while self._is_not_finished and self._char != "{":
-            descendant = TagSelector(self._word().lower())
+            word = self._word().lower()
+
+            if word.startswith("."):
+                descendant = ClassSelector(word)
+            else:
+                descendant = TagSelector(word)
+
             out = DescendantSelector(out, descendant)
 
             self._whitespace()
@@ -165,7 +193,7 @@ class CSSParser:
                 rules.append((selector, body))
                 self._whitespace()
             except ParsingError as err:
-                logger.warning(err)
+                logger.debug(err)
 
                 why = self._ignore_until("}")
 

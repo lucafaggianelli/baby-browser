@@ -131,6 +131,12 @@ class Text(Node):
 class Element(Node):
     tag: str = field(kw_only=True)
     attributes: dict[str, str | None] = field(default_factory=dict)
+    classes: set[str] = field(default_factory=set)
+
+    def __post_init__(self):
+        classes = self.attributes.pop("class", None)
+
+        self.classes = set(classes.split(" ") if classes else [])
 
     @property
     def is_block_element(self) -> bool:
@@ -143,7 +149,7 @@ class Element(Node):
             return "inline"
 
     def __repr__(self) -> str:
-        return f"<{self.tag} {self.attributes}>"
+        return f"<{self.tag} {self.classes=} {self.attributes}>"
 
 
 class HTMLParser:
