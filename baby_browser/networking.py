@@ -15,6 +15,8 @@ from baby_browser.utils import format_bytes
 from baby_browser.logger import get_logger
 
 
+logger = get_logger(__name__)
+
 CONTENT_TYPE_DEFAULT_CHARSET = "utf-8"
 HTTP_DEFAULT_CHARSET = "ISO-8859-1"
 HTTP_NEWLINE = "\r\n"
@@ -86,16 +88,14 @@ def read_cache(url: URL) -> HttpResponse | None:
     with cache_file.open("rb") as f:
         response: HttpResponse = pickle.load(f)
 
-        if response.cache_expiration and response.cache_expiration > datetime.utcnow():
-            return response
-        else:
-            # The cache is expired
-            cache_file.unlink()
+    if response.cache_expiration and response.cache_expiration > datetime.utcnow():
+        return response
+    else:
+        # The cache is expired
+        logger.debug("Cache expired, deleting it")
+        cache_file.unlink()
 
     return None
-
-
-logger = get_logger(__name__)
 
 
 def _get_available_content_encoding():
