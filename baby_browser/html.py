@@ -38,46 +38,6 @@ HEAD_TAGS = [
     "script",
 ]
 
-BLOCK_ELEMENTS = [
-    "html",
-    "body",
-    "article",
-    "section",
-    "nav",
-    "aside",
-    "h1",
-    "h2",
-    "h3",
-    "h4",
-    "h5",
-    "h6",
-    "hgroup",
-    "header",
-    "footer",
-    "address",
-    "p",
-    "hr",
-    "pre",
-    "blockquote",
-    "ol",
-    "ul",
-    "menu",
-    "li",
-    "dl",
-    "dt",
-    "dd",
-    "figure",
-    "figcaption",
-    "main",
-    "div",
-    "table",
-    "form",
-    "fieldset",
-    "legend",
-    "details",
-    "summary",
-]
-
 HIDDEN_ELEMENTS = [
     "head",
     "script",
@@ -105,18 +65,8 @@ class Node:
     parent: Optional["Node"] = None
     style: dict[str, str] = field(default_factory=dict, init=False)
 
-    # By default a Node is inline
-
-    @property
-    def is_block_element(self) -> bool:
-        return False
-
-    @property
-    def is_inline_element(self) -> bool:
-        return not self.is_block_element
-
     def get_layout_mode(self) -> Literal["inline", "block"]:
-        return "block" if self.is_block_element else "inline"
+        return self.style.get("display", "inline")
 
 
 @dataclass
@@ -135,18 +85,7 @@ class Element(Node):
 
     def __post_init__(self):
         classes = self.attributes.pop("class", None)
-
         self.classes = set(classes.split(" ") if classes else [])
-
-    @property
-    def is_block_element(self) -> bool:
-        return self.tag in BLOCK_ELEMENTS
-
-    def get_layout_mode(self) -> Literal["inline", "block"]:
-        if any([child.is_block_element for child in (self.children or [self])]):
-            return "block"
-        else:
-            return "inline"
 
     def __repr__(self) -> str:
         return f"<{self.tag} {self.classes=} {self.attributes}>"
