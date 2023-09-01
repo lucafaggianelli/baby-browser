@@ -135,16 +135,16 @@ class BlockLayout:
             self.previous.y + self.previous.height if self.previous else self.parent.y
         )
 
-        if width := self.html_node.style.get("width", "auto") != "auto":
+        if (width := self.html_node.style.get("width", "auto")) != "auto":
             # width: explicit
-            self.width = width
+            self.width = float(width)
             logger.debug("Explicit width %f", self.width)
         else:
             # width: auto, fills the horizontal space
             self.width = self.parent.width
 
-        if height := self.html_node.style.get("height", "auto") != "auto":
-            self.height = height
+        if (height := self.html_node.style.get("height", "auto")) != "auto":
+            self.height = float(height)
             logger.debug("Explicit height %f", self.height)
         else:
             self.height = 0
@@ -155,7 +155,7 @@ class BlockLayout:
             self._layout_intermediate()
 
             self.height = sum([child.height for child in self.children], 0.0)
-        else:
+        elif mode == "inline":
             self._line = []
             self.cursor_x: float = 0
             self.cursor_y: float = 0
@@ -166,6 +166,8 @@ class BlockLayout:
 
             if not self.height:
                 self.height = self.cursor_y
+        else:
+            logger.warning("Unsupported display mode %s", mode)
 
     def paint(self, display_list: list):
         bgcolor = self.html_node.style.get("background-color", "transparent")
@@ -179,11 +181,17 @@ class BlockLayout:
                 )
             )
 
-        if self.html_node.get_layout_mode() == "block":
-            for child in self.children:
-                child.paint(display_list)
-        else:
+        mode = self.html_node.get_layout_mode()
+
+        if mode == "block":
+            pass
+        elif mode == "inline":
             display_list.extend(self.display_list)
+        else:
+            logger.warning("Unsupported display mode %s", mode)
+
+        for child in self.children:
+            child.paint(display_list)
 
     def _layout_intermediate(self):
         previous = None
