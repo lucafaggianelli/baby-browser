@@ -57,6 +57,18 @@ class DescendantSelector(CSSSelector):
         return f"{self.ancestor} {self.descendant}"
 
 
+class SequenceSelector(CSSSelector):
+    def __init__(self, selectors: list[CSSSelector]) -> None:
+        self.selectors = selectors
+        self.priority = sum(selector.priority for selector in self.selectors)
+
+    def matches(self, node: Node) -> bool:
+        return all(selector.matches(node) for selector in self.selectors)
+
+    def __repr__(self) -> str:
+        return "".join([str(sel) for sel in self.selectors])
+
+
 class ParsingError(Exception):
     expected_kw: str
     index: int
@@ -159,6 +171,13 @@ class CSSParser:
 
         if word.startswith("."):
             out = ClassSelector(word)
+        elif "." in word:
+            parts = word.split(".")
+
+            tag = TagSelector(parts[0])
+            classes = [ClassSelector(class_name) for class_name in parts[1:]]
+
+            out = SequenceSelector([tag, *classes])
         else:
             out = TagSelector(word)
 
@@ -169,6 +188,13 @@ class CSSParser:
 
             if word.startswith("."):
                 descendant = ClassSelector(word)
+            elif "." in word:
+                parts = word.split(".")
+
+                tag = TagSelector(parts[0])
+                classes = [ClassSelector(class_name) for class_name in parts[1:]]
+
+                descendant = SequenceSelector([tag, *classes])
             else:
                 descendant = TagSelector(word)
 
