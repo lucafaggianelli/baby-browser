@@ -317,10 +317,12 @@ class Browser:
         with DEFAULT_CSS.open("r", encoding="utf-8") as f:
             self.default_style_sheet = CSSParser(f.read()).parse_css()
 
+        self._previous_window_width = -1
+
     def _on_resize(self, event: tkinter.Event):
         window_width = self.canvas.winfo_width()
 
-        if window_width <= 1:
+        if window_width <= 1 or window_width == self._previous_window_width:
             return
 
         self.document.layout(window_width)
@@ -330,6 +332,8 @@ class Browser:
 
         self.canvas.delete("all")
         self.draw()
+
+        self._previous_window_width = window_width
 
     def _on_scroll(self, event: tkinter.Event):
         scroll_delta = 0
